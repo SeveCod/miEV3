@@ -172,3 +172,27 @@ def test_la_pausa_no_parte_la_carga_en_dos(env, monkeypatch):
     sessions.process({**snap, "ts": t(300), "charging": 0, "soc": 70})
     assert len(avisos) == 1 and "50% → 70%" in avisos[0]
     assert "1 pausa por consumo de la casa (90 min)" in avisos[0]
+
+
+def test_pausa_maxima_con_la_casa_aun_alta_alarga_y_avisa_una_vez(env):
+    """Horno o estufa: a los 90 min la casa sigue alta; reanudar haría saltar el limitador."""
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 1, kw=1.7)
+    correr(control, casa, 1, 120, kw=1.7)
+    assert ordenes == ["stop"]
+    alargadas = [a for a in avisos if "Alargo la pausa" in a[0]]
+    assert len(alargadas) == 1 and alargadas[0][1] == "TODAY"
+    correr(control, casa, 120, 131, kw=0.3)            # baja: reanuda por la vía normal
+    assert ordenes == ["stop", "start"]
+
+
+def test_pausa_maxima_reanuda_si_la_casa_ya_esta_entre_umbrales(env):
+    control, casa, ordenes, _ = env
+    correr(control, casa, 0, 1, kw=1.7)
+    correr(control, casa, 1, 91, kw=0.8)               # ni alta ni baja: a los 90 min reanuda
+    assert ordenes == ["stop", "start"]
+
+
+def test_tope_por_defecto_es_8_pausas():
+    import importlib, config
+    assert importlib.reload(config).LOAD_MAX_PAUSES == 8

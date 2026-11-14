@@ -14,7 +14,8 @@ Mínimas llamadas (cada llamada al coche gasta cupo de la API y batería de 12 V
 
 Reglas:
 - Casa ≥ LOAD_HIGH_KW → pausa. Casa < LOAD_LOW_KW durante LOAD_LOW_MIN → reanuda.
-- Una pausa nunca dura más de LOAD_PAUSE_MAX_MIN (aunque HA no responda). Solo reanuda lo que pausó él.
+- A los LOAD_PAUSE_MAX_MIN de pausa reanuda si la casa ya no está alta o HA no responde; si sigue
+  alta, alarga la pausa y avisa una vez. Solo reanuda lo que pausó él.
 - Como mucho LOAD_MAX_PAUSES pausas por carga; al llegar al tope avisa una vez y deja cargar.
 - Una orden que falla se reintenta en los minutos siguientes; a los MAX_TRIES fallos avisa y
   no insiste en esa carga.
@@ -29,6 +30,7 @@ from notify import notify
 
 MAX_TRIES = 3
 PAUSED, RESUMED, LOW_SINCE, TRIES = "load_paused_at", "load_resumed_at", "load_low_since", "load_tries"
+EXTENDED = "load_extended"   # pausa (su inicio) ya alargada y avisada
 # Carga en curso (session_start_ts): pausas hechas, minutos en pausa y si ya no se insiste
 CYCLE, COUNT, PAUSED_MIN, GIVEN_UP = "load_cycle", "load_count", "load_paused_min", "load_given_up"
 
@@ -142,10 +144,17 @@ def tick(now: str | None = None) -> None:
     now = now or db.utcnow()
     paused = db.get_state(PAUSED) or ""
     if paused:
-        if sessions._minutos(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
-            _reanudar(now, por_seguridad=True)
-            return
         kw = potencia_casa()
+        if sessions._minutos(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
+            if kw is None or kw < config.LOAD_HIGH_KW:
+                _reanudar(now, por_seguridad=True)
+                return
+            # La casa sigue alta (horno, estufa): reanudar haría saltar el limitador. Se alarga.
+            if db.get_state(EXTENDED) != paused:
+                db.set_state(EXTENDED, paused)
+                notify(f"⚠️ {config.CAR_NAME}: la carga lleva {config.LOAD_PAUSE_MAX_MIN:.0f} min en "
+                       f"pausa y la casa sigue en {kw:.1f} kW. Alargo la pausa hasta que baje.",
+                       "TODAY", event_id=f"miev3:load-extend:{paused}")
         if kw is None:
             return
         if kw >= config.LOAD_LOW_KW:
