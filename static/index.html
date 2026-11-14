@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EV Brain</title>
+<link rel="icon" href="/img/icon-car.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--ria:#12343B;--mist:#EEF2F0;--card:#F8FAF9;--ink:#1B2326;--charge:#2F8F83;--euro:#C98A1B;--warn:#C0563B;--line:#C9D2CF;--soft:#5B6B6F}
+@media (prefers-color-scheme:dark){:root{--mist:#0F1A1D;--card:#142226;--ink:#E4ECE9;--line:#2A3A3E;--soft:#93A5A8}}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Familjen Grotesk",system-ui,sans-serif;background:var(--mist);color:var(--ink);line-height:1.45}
+main{max-width:960px;margin:0 auto;padding:20px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+h1{font-size:1.25rem;font-weight:700;margin:0;letter-spacing:.01em}
+#updated{font-size:.85rem;color:var(--soft)}
+.hero{display:flex;justify-content:center;margin:18px 0 6px}.hero[hidden]{display:none}
+.hero img{width:min(560px,92%);height:auto;max-height:260px;object-fit:contain}
+.battery{margin:6px 0 24px;position:relative;height:96px;border:3px solid var(--ria);border-radius:14px;overflow:hidden}
+@media (prefers-color-scheme:dark){.battery{border-color:var(--charge)}}
+.fill{position:absolute;inset:0 auto 0 0;background:var(--charge);width:0;transition:width .9s ease}
+.charging .fill{background:repeating-linear-gradient(110deg,var(--charge) 0 22px,#3BA597 22px 44px)}
+.reading{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 22px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.45)}
+.soc{font-size:3.4rem;font-weight:700;letter-spacing:-.02em}
+.range{font-size:1.05rem;text-align:right;color:var(--ink);text-shadow:none}
+.tile,.gauge,.day,.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0}
+.tile b,.tile span,.gauge .l,.gauge .t,.stat span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,40%),1fr));gap:10px;margin-bottom:8px}
+.tile{padding:0 14px;height:72px;display:flex;gap:12px;align-items:center}
+.tile>div:last-child{min-width:0;flex:1}
+.ico{flex:0 0 28px;height:28px;background:var(--charge);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
+.tile b,.tile span{display:block}
+a.tile{color:inherit;text-decoration:none}a.tile:hover{border-color:var(--charge)}
+.tile b{font-size:1.15rem;font-weight:500;line-height:1.3}
+.tile span{font-size:.82rem;color:var(--soft);line-height:1.3}
+.euro{color:var(--euro)}.bad{color:var(--warn)}
+h2{font-size:1.05rem;font-weight:700;margin:34px 0 4px}
+.sub{font-size:.85rem;color:var(--soft);margin:0 0 12px}
+.gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.gauge{padding:12px 10px 10px;text-align:center}
+.gauge svg{width:100%;max-width:220px;height:auto;display:block;margin:0 auto}
+.gauge .v{font-size:1.6rem;font-weight:700;margin-top:-8px}
+.gauge .u{font-size:.8rem;color:var(--soft)}
+.gauge .l{font-size:1rem;font-weight:500;margin-top:2px}
+.gauge .t{font-size:.85rem;color:var(--soft);margin-top:4px}
+.split{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:14px 0 6px;background:var(--line)}
+.split div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--soft)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
+.tabs{display:flex;gap:6px;margin:6px 0 10px}
+.tabs button{font:inherit;font-size:.88rem;padding:5px 12px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--charge);border-color:var(--charge);color:#fff}
+.chart{height:240px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:500;color:var(--soft)}
+.n{text-align:right;font-variant-numeric:tabular-nums}
+.empty{color:var(--soft);font-size:.92rem}
+details{margin-top:8px}
+summary{cursor:pointer;color:var(--charge);font-weight:500;font-size:.9rem;padding:6px 0}
+.days{display:grid;gap:10px}
+.day{padding:12px 14px}
+.dayhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.dayhead .d{font-weight:700;text-transform:capitalize}
+.dayhead .km{font-size:1.6rem;font-weight:700;letter-spacing:-.01em}
+.dayhead .km small{font-size:.8rem;font-weight:500;color:var(--soft);margin-left:3px}
+.chips{display:flex;gap:14px;flex-wrap:wrap;font-size:.85rem;color:var(--soft);margin:2px 0 10px}
+.chips b{color:var(--ink);font-weight:500}
+.chips .euro,.chips .euro b{color:var(--euro)}
+.tl{position:relative;height:26px;border-radius:6px;background:var(--line)}
+.tl span{position:absolute;top:3px;bottom:3px;min-width:3px;border-radius:3px}
+.tl span.chg{top:0;bottom:0;border-radius:4px;background:repeating-linear-gradient(110deg,rgba(201,138,27,.55) 0 6px,rgba(201,138,27,.3) 6px 12px);border:1px solid var(--euro)}
+tr.chgrow td{color:var(--euro);white-space:normal}
+.hours{display:flex;justify-content:space-between;font-size:.7rem;color:var(--soft);margin-top:3px}
+.speedkey{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--soft);margin:0 0 10px}
+.speedkey i{display:inline-block;width:90px;height:8px;border-radius:4px;background:linear-gradient(90deg,#7FC8BE,#2F8F83,#C98A1B,#C0563B)}
+.big{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,45%),1fr));gap:10px}
+#summary{grid-template-columns:repeat(3,1fr)}
+.stat{padding:12px 14px}
+.stat b{display:block;font-size:1.5rem;font-weight:700;letter-spacing:-.01em}
+.stat b small{font-size:.8rem;font-weight:500;color:var(--soft);margin-left:3px}
+.stat span{display:block;font-size:.82rem;color:var(--soft)}
+.heat{max-width:640px;display:grid;grid-template-columns:30px repeat(24,minmax(0,1fr));gap:2px;font-size:.68rem;color:var(--soft)}
+.heat div{aspect-ratio:1;border-radius:2px;background:var(--line)}
+.heat .lbl{align-self:center}
+.btn{font:inherit;font-size:.9rem;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.btn:hover{border-color:var(--charge)}.btn.primary{background:var(--charge);border-color:var(--charge);color:#fff}
+.hright{display:flex;align-items:center;gap:12px}
+dialog{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--mist);color:var(--ink)}
+dialog::backdrop{background:rgba(15,26,29,.55)}
+dialog form{padding:18px 18px 0}
+dialog h2{margin:0 0 4px}
+fieldset{border:1px solid var(--line);border-radius:12px;margin:14px 0 0;padding:6px 14px 12px;background:var(--card)}
+legend{font-weight:700;padding:0 6px}
+.field{display:grid;grid-template-columns:1fr minmax(0,170px);gap:2px 12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.field:last-child{border-bottom:0}
+.field label{font-weight:500}
+.field .in{display:flex;align-items:center;gap:6px}
+.field input{font:inherit;width:100%;min-width:0;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--mist);color:var(--ink)}
+.field input:focus{outline:2px solid var(--charge);outline-offset:1px}
+.field .unit{flex:0 0 72px;font-size:.8rem;color:var(--soft);white-space:nowrap}
+.field small{grid-column:1/-1;font-size:.8rem;color:var(--soft)}
+.actions{position:sticky;bottom:0;display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:14px 0 18px;background:var(--mist)}
+#setmsg{margin-right:auto;font-size:.85rem;color:var(--warn)}
+@media (max-width:560px){.field{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+@media (max-width:560px){
+  .tile{padding:0 10px;height:64px;gap:8px}.ico{flex-basis:22px;height:22px}
+  .tile b{font-size:1rem}.tile span{font-size:.74rem}
+  .big,#summary{grid-template-columns:1fr}
+  .stat{display:flex;align-items:baseline;gap:10px;padding:10px 14px}
+  .stat b{flex:none;font-size:1.3rem}
+  .stat span{min-width:0}
+  .gauge .l{font-size:.72rem}.gauge .t{font-size:.68rem}
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="brand"><h1 id="carname">EV Brain</h1></div>
+    <div class="hright"><span id="updated">Cargando…</span><button class="btn" id="openset" type="button">⚙ Ajustes</button></div>
+  </header>
+
+  <!-- Foto opcional: pon la tuya en static/img/car.webp (solo se pinta si existe) -->
+  <div class="hero" id="hero" hidden></div>
+
+  <div class="battery" id="battery" role="img" aria-label="Nivel de batería">
+    <div class="fill" id="fill"></div>
+    <div class="reading"><span class="soc" id="soc">–</span><span class="range" id="range"></span></div>
+  </div>
+
+  <section class="now" id="now"></section>
+
+  <h2>Resumen</h2>
+  <p class="sub" id="sumnote">Costes estimados con tu consumo y tu precio de la luz (incluye pérdidas de carga).</p>
+  <section class="big" id="summary"></section>
+
+  <h2>Eficiencia</h2>
+  <p class="sub" id="effnote">Consumo según el coche. Provisional hasta calibrarlo con el % de batería.</p>
+  <div class="gauges" id="gauges"></div>
+  <div class="split" id="split"></div>
+  <div class="legend" id="legend"></div>
+
+  <h2>Histórico</h2>
+  <div class="tabs" role="group" aria-label="Agrupar por">
+    <button data-g="day">Día</button><button data-g="week">Semana</button><button data-g="month" aria-pressed="true">Mes</button>
+  </div>
+  <div class="chart"><canvas id="histChart"></canvas></div>
+  <details><summary>Detalles</summary><div class="scroll"><table><thead><tr><th>Periodo</th><th class="n">km</th><th class="n">viajes</th><th class="n">h conducción</th><th class="n">kWh/100</th><th class="n">L/100 eq.</th><th class="n">€ est.</th><th class="n">kWh cargados</th><th class="n">€ cargas</th></tr></thead>
+  <tbody id="hist"></tbody></table></div></details>
+
+  <h2>Récords</h2>
+  <section class="big" id="records"></section>
+
+  <h2>Cuándo conduces</h2>
+  <p class="sub">km por día de la semana y hora de salida, desde que tienes el coche.</p>
+  <div class="heat" id="heat"></div>
+
+  <h2>Batería, últimos 7 días</h2>
+  <div class="chart"><canvas id="socChart"></canvas></div>
+
+  <h2>Cargas</h2>
+  <div class="scroll"><table><thead><tr><th>Fin</th><th>Batería</th><th class="n">kWh</th><th class="n">€</th></tr></thead>
+  <tbody id="sessions"></tbody></table></div>
+
+  <h2>Recorridos, últimos 30 días</h2>
+  <div class="speedkey">velocidad media <i></i> lenta → rápida · cada barra es un viaje · <span class="euro">▨ carga</span></div>
+  <div class="days" id="days"></div>
+</main>
+
+<dialog id="settings" aria-labelledby="settitle">
+  <form id="setform" method="dialog" novalidate>
+    <h2 id="settitle">Ajustes</h2>
+    <p class="sub">Se aplican al momento, sin reiniciar. Las cargas ya guardadas conservan su coste; las cifras estimadas del panel se recalculan. Credenciales y contraseñas se cambian en el fichero <code>.env</code>.</p>
+    <div id="setfields"></div>
+    <div class="actions"><span id="setmsg" role="alert"></span>
+      <button class="btn" type="button" id="setcancel">Cancelar</button>
+      <button class="btn primary" type="submit">Guardar</button></div>
+  </form>
+</dialog>
+<script>
+const $ = id => document.getElementById(id);
+const j = u => fetch(u).then(r => r.json());
+const fmt = (n, d=0) => n == null || isNaN(n) ? "–" : Number(n).toLocaleString("es-ES",{maximumFractionDigits:d,minimumFractionDigits:d});
+const dt = s => s ? new Date(s).toLocaleString("es-ES",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
+const pad = n => String(n).padStart(2,"0");
+const hhmm = m => `${pad(Math.floor(Math.min(m,1439)/60))}:${pad(Math.min(m,1439)%60)}`;   // minutos del día → "HH:MM"
+const ymdDate = d => new Date(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8));             // "YYYYMMDD" → Date local
+const dday = d => d ? ymdDate(d).toLocaleDateString("es-ES",{day:"numeric", month:"short"}) : "–";
+const css = getComputedStyle(document.documentElement);
+const C = v => css.getPropertyValue(v).trim();
+const tile = (icon, value, label, cls="", href="") => {
+  const tag = href ? `a href="${href}" target="_blank" rel="noopener"` : "div";
+  return `<${tag} class="tile"><div class="ico" style="--m:url(/img/${icon})"></div><div><b class="${cls}" title="${value}">${value}</b><span title="${label}">${label}</span></div></${href ? "a" : "div"}>`;
+};
+
+function renderNow(k, v2c){
+  $("fill").style.width = (k.soc||0) + "%";
+  $("battery").classList.toggle("charging", !!k.charging);
+  $("soc").textContent = fmt(k.soc) + "%";
+  const h = k.charge_remaining_min;
+  $("range").innerHTML = fmt(k.range_km) + " km<br>" +
+    (k.charging ? `⚡ ${fmt(k.charge_power_kw,1)} kW` + (h ? ` · al ${fmt(k.charge_limit_ac)} % a las ${new Date(new Date(k.car_updated_at || k.ts).getTime() + h*60000).toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})}` : "") : (k.plugged ? "enchufado" : ""));
+  $("updated").textContent = "Dato del coche: " + dt(k.car_updated_at || k.ts);
+  const lock = k.locked == null ? "–" : k.locked ? "Cerrado" : "Abierto";
+  const open = [k.doors_open ? "puertas" : null, k.windows_open ? "ventanillas" : null].filter(Boolean);
+  $("now").innerHTML = [
+    tile("icon-car.png", lock, open.length ? "abierto: " + open.join(" y ") : "todo cerrado", k.locked === 0 || open.length ? "bad" : ""),
+    tile("icon-plug.png", k.plugged ? "Enchufado" : "Sin enchufar", `AC ${fmt(k.charge_limit_ac)} % · DC ${fmt(k.charge_limit_dc)} %`),
+    tile("icon-battery.png", `Salud ${fmt(k.soh)} %`, `${fmt(k.batt_temp_min)}–${fmt(k.batt_temp_max)} °C · 12 V ${fmt(k.battery_12v)} %`),
+    tile("icon-car.png", fmt(k.odometer) + " km", "odómetro"),
+    // Última posición que reporta el coche; se abre en Google Maps (no se geocodifica fuera)
+    k.lat != null && k.lon != null ? tile("icon-car.png", "Ver en mapa ↗", `${(+k.lat).toFixed(4)}, ${(+k.lon).toFixed(4)}`, "",
+      `https://www.google.com/maps/search/?api=1&query=${k.lat},${k.lon}`) : "",
+    // Reservada para el Trydan: solo aparece cuando llegan lecturas del cargador
+    v2c ? tile("icon-plug.png", fmt((v2c.charge_power_w||0)/1000,1) + " kW", "Trydan ahora") : "",
+  ].join("");
+}
+
+function gaugeSVG(val, ref){
+  // Escala alrededor del consumo homologado del coche (con WLTP 15: de 8 a 23)
+  const min = Math.floor(ref * .55), max = Math.ceil(ref * 1.5), cx = 110, cy = 105, r = 86;
+  const pt = x => { const a = Math.PI * (1 - (Math.min(Math.max(x,min),max) - min) / (max - min)); return [cx + r*Math.cos(a), cy - r*Math.sin(a)]; };
+  const arc = (a, b, col, w) => { const [x1,y1] = pt(a), [x2,y2] = pt(b); return `<path d="M${x1} ${y1} A${r} ${r} 0 0 1 ${x2} ${y2}" fill="none" stroke="${col}" stroke-width="${w}" stroke-linecap="round"/>`; };
+  const [mx, my] = pt(ref), [nx, ny] = val == null ? [cx, cy - r] : pt(val);
+  const col = val == null ? C("--line") : val <= ref ? C("--charge") : C("--euro");
+  return `<svg viewBox="0 0 220 120" role="img" aria-label="${val == null ? "sin datos" : fmt(val,1) + " kWh/100 km"}">
+    ${arc(min, max, C("--line"), 12)}${val == null ? "" : arc(min, val, col, 12)}
+    <line x1="${mx}" y1="${my-10}" x2="${mx}" y2="${my+10}" stroke="${C("--ink")}" stroke-width="2"/>
+    <text x="${mx}" y="${my-14}" font-size="10" text-anchor="middle" fill="${C("--soft")}">WLTP</text>
+    <circle cx="${nx}" cy="${ny}" r="5" fill="${C("--ink")}"/>
+    <text x="22" y="118" font-size="10" fill="${C("--soft")}">${min}</text><text x="198" y="118" font-size="10" text-anchor="end" fill="${C("--soft")}">${max}</text></svg>`;
+}
+
+function renderEff(e){
+  const g = (title, x) => `<div class="gauge">${gaugeSVG(x && x.kwh_100, e.wltp_kwh_100)}
+    <div class="v">${fmt(x && x.kwh_100,1)}</div><div class="u">kWh/100 km</div>
+    <div class="l">≈ ${fmt(x && x.l_100,2)} L/100 km</div>
+    <div class="t">${title}${x && x.km ? " · " + fmt(x.km) + " km" : ""}</div></div>`;
+  const d = e.last_day && e.last_day.day;
+  $("gauges").innerHTML = g(d ? `${d.slice(6,8)}/${d.slice(4,6)}` : "Último día", e.last_day) + g("30 días", e.d30) + g("Desde nuevo", e.lifetime);
+  const cal = e.calibrated
+    ? `Calibrado con el % de batería: coche × ${fmt(e.soc_factor,2)} (${fmt(e.soc_basis_km)} km sin cargar); por día, aproximado.`
+    : `Según el contador del coche, que suele quedarse corto: falta base para calibrarlo con el % de batería.`;
+  $("effnote").textContent = `${cal} Frente al WLTP de ${fmt(e.wltp_kwh_100,1)} kWh/100 km. L/100 km equivalente en energía (1 L de diésel ≈ ${fmt(e.diesel_kwh_per_l,1)} kWh).`;
+  const b = e.breakdown_30d, parts = [["Motor", b.engine_wh, C("--charge")], ["Clima", b.climate_wh, C("--euro")], ["Electrónica", b.electronics_wh, "#6C8CA0"], ["Cuidado batería", b.battery_care_wh, "#9A7FB0"]];
+  const tot = parts.reduce((a,p) => a + (p[1]||0), 0);
+  $("split").innerHTML = tot ? parts.map(p => `<div style="width:${(p[1]||0)/tot*100}%;background:${p[2]}" title="${p[0]}"></div>`).join("") : "";
+  $("legend").innerHTML = tot ? parts.map(p => `<span><i style="background:${p[2]}"></i>${p[0]} ${fmt((p[1]||0)/tot*100)} % · ${fmt((p[1]||0)/1000,1)} kWh</span>`).join("")
+    + `<span>Recuperado (pendiente de aclarar) ${fmt((b.regen_wh||0)/1000,1)} kWh</span>` : "";
+}
+
+function speedColor(v){
+  const stops = [[0,[127,200,190]],[40,[47,143,131]],[80,[201,138,27]],[120,[192,86,59]]];
+  for (let i = 1; i < stops.length; i++) if (v <= stops[i][0]) {
+    const [a, ca] = stops[i-1], [b, cb] = stops[i], f = (v - a) / (b - a);
+    return `rgb(${ca.map((c,k) => Math.round(c + (cb[k]-c)*f)).join(",")})`;
+  }
+  return "rgb(192,86,59)";
+}
+
+function renderDays(trips, sessions, live, dayCost){
+  const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  const mins = d => d.getHours()*60 + d.getMinutes();
+  const by = {}, slot = d => (by[d] = by[d] || {trips:[], charges:[]});
+  trips.filter(t => t.distance_km > 0).forEach(t => slot(t.day).trips.push(t));
+  // Cargas terminadas y la que está en curso; las que cruzan medianoche se reparten entre días
+  const charges = sessions.map(s => ({...s, live:false}));
+  if (live) charges.push({start_ts: live.ts, end_ts: new Date().toISOString(), soc_start: live.soc, soc_end: live.soc_now, live:true});
+  const oldest = Date.now() - 30*864e5;
+  charges.forEach(s => {
+    const a = new Date(s.start_ts), b = new Date(s.end_ts);
+    if (b < oldest) return;
+    for (let d = new Date(a.getFullYear(), a.getMonth(), a.getDate()); d <= b; d.setDate(d.getDate()+1)) {
+      const from = d.toDateString() === a.toDateString() ? mins(a) : 0;
+      const to = d.toDateString() === b.toDateString() ? mins(b) : 1440;
+      slot(ymd(d)).charges.push({...s, from, to, first: d.toDateString() === a.toDateString()});
+    }
+  });
+  const days = Object.keys(by).sort().reverse();
+  if (!days.length){ $("days").innerHTML = `<p class="empty">Los viajes del día se guardan a las 23:45.</p>`; return; }
+  $("days").innerHTML = days.map(d => {
+    const {trips:ts, charges:cs} = by[d];
+    const km = ts.reduce((a,t) => a + t.distance_km, 0), min = ts.reduce((a,t) => a + (t.drive_min||0), 0);
+    const vmax = Math.max(0, ...ts.map(t => t.max_speed||0));
+    const date = ymdDate(d).toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
+    const tmin = t => { const h = String(t.start_time).padStart(6,"0"); return +h.slice(0,2)*60 + +h.slice(2,4); };
+    const items = [
+      ...ts.map(t => ({at: tmin(t), html:
+        `<tr><td>${hhmm(tmin(t))}</td><td class="n">${fmt(t.distance_km,1)}</td><td class="n">${fmt(t.drive_min)}</td><td class="n">${fmt(t.idle_min)}</td><td class="n">${fmt(t.avg_speed)}</td><td class="n">${fmt(t.max_speed)}</td></tr>`,
+        bar: `<span style="left:${tmin(t)/14.4}%;width:${Math.max((t.drive_min||1)/14.4,.4)}%;background:${speedColor(t.avg_speed||0)}" title="${hhmm(tmin(t))} · ${fmt(t.distance_km,1)} km · ${fmt(t.avg_speed)} km/h"></span>`})),
+      ...cs.map(c => ({at: c.from, html:
+        `<tr class="chgrow"><td>${hhmm(c.from)}</td><td colspan="5">⚡ ${c.live ? "Cargando" : "Carga"}${c.first ? "" : " (desde el día anterior)"} · ${fmt(c.soc_start)} → ${fmt(c.soc_end)} %${c.live ? " ahora" : ` · hasta las ${hhmm(c.to)}`}${c.kwh_est != null && !c.live ? ` · ${fmt(c.kwh_meter ?? c.kwh_est,1)} kWh · ${fmt(c.cost_eur,2)} €` : ""}</td></tr>`,
+        bar: `<span class="chg" style="left:${c.from/14.4}%;width:${Math.max((c.to-c.from)/14.4,.4)}%" title="Carga ${hhmm(c.from)}–${hhmm(c.to)}"></span>`})),
+    ].sort((a,b) => a.at - b.at);
+    const chips = [ts.length ? `<span><b>${ts.length}</b> viajes</span><span><b>${Math.floor(min/60)} h ${min%60} min</b> al volante</span><span>máx <b>${fmt(vmax)}</b> km/h</span>` : "",
+                   cs.length ? `<span class="euro"><b>${cs.length}</b> ${cs.length > 1 ? "cargas" : "carga"}</span>` : ""].join("");
+    const dc = dayCost[d];
+    const costChip = dc && dc.cost_est_eur != null && km
+      ? `<span class="euro"><b>${fmt(dc.cost_est_eur,2)} €</b> · ${fmt(dc.cost_est_eur/km*100,1)} cént/km</span>` : "";
+    return `<article class="day">
+      <div class="dayhead"><span class="d">${date}</span><span class="km">${fmt(km,1)}<small>km</small></span></div>
+      <div class="chips">${chips}${costChip}</div>
+      <div class="tl" role="img" aria-label="Viajes y cargas a lo largo del día">${items.map(i => i.bar).join("")}</div>
+      <div class="hours"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>24 h</span></div>
+      <details><summary>Detalles</summary><div class="scroll"><table><thead><tr><th>Hora</th><th class="n">km</th><th class="n">min</th><th class="n">parado</th><th class="n">km/h media</th><th class="n">máx</th></tr></thead><tbody>${items.map(i => i.html).join("")}</tbody></table></div></details>
+    </article>`;
+  }).join("");
+}
+
+const stat = (value, unit, label) => `<div class="stat"><b>${value}<small>${unit}</small></b><span title="${label}">${label}</span></div>`;
+
+function renderSummary(e, k, ins, months){
+  const d = e.d30 || {}, life = e.lifetime || {}, cur = months.length ? months[months.length-1] : null;
+  const limit = k && k.charge_limit_ac ? k.charge_limit_ac : 100;
+  const p = ins.projection, ds = e.diesel;
+  $("sumnote").textContent = `Costes estimados con tu consumo y ${fmt(e.price_eur_kwh,3)} €/kWh (incluye pérdidas de carga). `
+    + `Diésel de referencia: ${fmt(ds.l_100,1)} L/100 km a ${fmt(ds.price_eur_l,2)} €/L = ${fmt(ds.eur_100,2)} €/100 km.`;
+  $("summary").innerHTML = [
+    stat(fmt(d.eur_100,2), "€/100 km", "coste de circular · 30 días"),
+    stat(fmt(d.saving_eur,0), "€", "ahorro vs. diésel · 30 días"),
+    stat(fmt(life.saving_eur,0), "€", "ahorro vs. diésel · desde nuevo"),
+    stat(fmt(cur && cur.cost_est_eur,2), "€", `gasto en ${cur ? new Date(cur.period + "-01T12:00").toLocaleDateString("es-ES",{month:"long"}) : "este mes"} · ${fmt(cur && cur.km)} km`),
+    stat(fmt(d.range_full_km), "km", `al 100 % · ${fmt(d.range_full_km*limit/100)} km al ${limit} %`),
+    stat(p ? fmt(p.km_year) : "–", "km/año", p ? `${fmt(p.km_per_day)} km/día desde el ${dday(p.since)}` : "proyección"),
+  ].join("");
+}
+
+function renderRecords(ins){
+  const r = ins.records;
+  if (!r){ $("records").innerHTML = `<p class="empty">Sin viajes todavía.</p>`; return; }
+  $("records").innerHTML = [
+    stat(fmt(r.longest_trip.distance_km,1), "km", `viaje más largo · ${dday(r.longest_trip.day)}`),
+    stat(fmt(r.top_day.km,1), "km", `día con más km · ${dday(r.top_day.day)}`),
+    stat(fmt(r.max_speed.max_speed), "km/h", `velocidad máxima · ${dday(r.max_speed.day)}`),
+    stat(r.best_day ? fmt(r.best_day.kwh_100,1) : "–", "kWh/100", r.best_day ? `más eficiente · ${dday(r.best_day.day)}` : "día más eficiente"),
+  ].join("");
+}
+
+function renderHabits(h){
+  const max = Math.max(1, ...h.flat()), days = ["lun","mar","mié","jue","vie","sáb","dom"];
+  let html = `<span class="lbl"></span>` + Array.from({length:24}, (_,i) => `<span class="lbl" style="text-align:center">${i % 6 ? "" : i}</span>`).join("");
+  h.forEach((row, i) => {
+    html += `<span class="lbl">${days[i]}</span>` + row.map((km, hr) =>
+      `<div title="${days[i]} ${hr} h · ${fmt(km,1)} km" style="${km ? `background:${C("--charge")};opacity:${.25 + .75*km/max}` : ""}"></div>`).join("");
+  });
+  $("heat").innerHTML = html;
+}
+
+let histChart;
+const hist = {};   // /api/history por agrupación, se pide una sola vez
+async function renderHist(group){
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === group));
+  let h = await (hist[group] ??= j("/api/history?group=" + group));
+  if (group === "day") h = h.slice(-31);
+  $("hist").innerHTML = h.length ? h.slice().reverse().map(r => `<tr><td>${r.period}</td><td class="n">${fmt(r.km,1)}</td><td class="n">${fmt(r.trips)}</td><td class="n">${fmt(r.drive_min/60,1)}</td><td class="n">${fmt(r.kwh_100,1)}</td><td class="n">${fmt(r.l_100,2)}</td><td class="n">${fmt(r.cost_est_eur,2)}</td><td class="n">${fmt(r.charged_kwh,1)}</td><td class="n">${fmt(r.cost_eur,2)}</td></tr>`).join("")
+    : `<tr><td colspan="9" class="empty">Sin datos todavía.</td></tr>`;
+  if (histChart) histChart.destroy();
+  histChart = new Chart($("histChart"), {
+    data:{labels:h.map(r => r.period), datasets:[
+      {type:"bar", label:"km", data:h.map(r => r.km), backgroundColor:C("--charge"), yAxisID:"y", order:2},
+      {type:"line", label:"kWh/100 km", data:h.map(r => r.kwh_100), borderColor:C("--euro"), backgroundColor:C("--euro"), pointRadius:3, tension:.25, yAxisID:"y1", spanGaps:true, order:1}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{labels:{color:C("--soft")}}},
+      scales:{y:{position:"left", title:{display:true, text:"km"}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, title:{display:true, text:"kWh/100 km"}}, x:{ticks:{maxTicksLimit:12}}}}
+  });
+}
+
+// Ajustes: formulario generado desde /api/settings (definición, límites y valor actual)
+let setDefs = [];
+function applyName(name){ $("carname").textContent = name; document.title = name; }
+function renderSettings(defs){
+  setDefs = defs;
+  const groups = [...new Set(defs.map(f => f.group))];
+  const box = $("setfields"); box.replaceChildren();
+  groups.forEach(g => {
+    const fs = document.createElement("fieldset"), lg = document.createElement("legend");
+    lg.textContent = g; fs.append(lg);
+    defs.filter(f => f.group === g).forEach(f => {
+      const row = document.createElement("div"); row.className = "field";
+      const lb = document.createElement("label"); lb.htmlFor = "set_" + f.key; lb.textContent = f.label;
+      const wrap = document.createElement("div"); wrap.className = "in";
+      const inp = document.createElement("input"); inp.id = "set_" + f.key; inp.name = f.key;
+      inp.value = f.value ?? "";
+      if (f.kind === "text") { inp.type = "text"; inp.maxLength = f.hi; }
+      else { inp.type = "text"; inp.inputMode = "decimal"; inp.autocomplete = "off"; }
+      wrap.append(inp);
+      if (f.unit) { const u = document.createElement("span"); u.className = "unit"; u.textContent = f.unit; wrap.append(u); }
+      row.append(lb, wrap);
+      if (f.help) { const h = document.createElement("small"); h.textContent = f.help; row.append(h); }
+      fs.append(row);
+    });
+    box.append(fs);
+  });
+}
+$("openset").onclick = () => { renderSettings(setDefs); $("setmsg").textContent = ""; $("settings").showModal(); };
+$("setcancel").onclick = () => $("settings").close();
+$("setform").onsubmit = async ev => {
+  ev.preventDefault();
+  // Solo se envía lo que ha cambiado
+  const changed = {};
+  setDefs.forEach(f => { const v = $("set_" + f.key).value; if (String(f.value ?? "") !== v) changed[f.key] = v; });
+  if (!Object.keys(changed).length) { $("settings").close(); return; }
+  const r = await fetch("/api/settings", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(changed)});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) { $("setmsg").textContent = body.detail || `Error ${r.status}`; return; }
+  location.reload();
+};
+
+async function load(){
+  const [defs, st, snaps, ses, trips, eff, ins, months, days] = await Promise.all([j("/api/settings"), j("/api/status"), j("/api/snapshots?days=7"), j("/api/sessions"), j("/api/trips"), j("/api/efficiency"), j("/api/insights"), j("/api/history?group=month"), j("/api/history?group=day")]);
+  Object.assign(hist, {month: months, day: days});
+  renderSettings(defs);
+  applyName(defs.find(f => f.key === "CAR_NAME").value);
+  eff.price_eur_kwh = st.price;
+  if (st.photo) { $("hero").innerHTML = `<img src="/img/car.webp" alt="Foto del coche">`; $("hero").hidden = false; }
+  if (st.kia) renderNow(st.kia, st.v2c); else $("updated").textContent = "Aún no hay lecturas. Arranca el colector.";
+  renderEff(eff);
+  renderSummary(eff, st.kia, ins, months);
+  renderRecords(ins);
+  renderHabits(ins.habits);
+  renderHist("month");
+  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => renderHist(b.dataset.g));
+
+  $("sessions").innerHTML = ses.length ? ses.slice(0,15).map(s =>
+    `<tr><td>${dt(s.end_ts)}</td><td>${fmt(s.soc_start)} → ${fmt(s.soc_end)}%</td><td class="n">${fmt(s.kwh_meter ?? s.kwh_est,1)}</td><td class="n">${fmt(s.cost_eur,2)}</td></tr>`).join("")
+    : `<tr><td colspan="4" class="empty">Las cargas aparecerán aquí al terminar la primera.</td></tr>`;
+
+  const live = st.charging_since && st.kia ? {...st.charging_since, soc_now: st.kia.soc} : null;
+  const dayCost = Object.fromEntries(days.map(r => [r.period.replaceAll("-", ""), r]));
+  renderDays(trips, ses, live, dayCost);
+
+  new Chart($("socChart"), {
+    type:"line",
+    data:{labels:snaps.map(s => dt(s.ts)), datasets:[{data:snaps.map(s => s.soc), borderColor:C("--charge"), borderWidth:2, pointRadius:snaps.length < 20 ? 3 : 0, tension:.25, fill:false}]},
+    options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{min:0,max:100,ticks:{callback:v => v + "%"}}, x:{ticks:{maxTicksLimit:7}}}}
+  });
+}
+load();
+</script>
+</body>
+</html>

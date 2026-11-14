@@ -1,0 +1,17 @@
+.env
+*.db
+__pycache__/
+logs/
+venv/
+.venv/
+.playwright-mcp/
+.pytest_cache/
+
+# Originales y catálogo del usuario: solo se versiona lo que se sirve (static/img)
+static/*
+!static/index.html
+!static/img/
+.DS_Store
+.claude/
+# Foto propia del coche (opcional, no se versiona)
+static/img/car.webp
