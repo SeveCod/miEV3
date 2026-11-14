@@ -23,6 +23,17 @@ def _distancia_m(lat1, lon1, lat2, lon2) -> float:
     return 2 * 6_371_000 * math.asin(math.sqrt(a))
 
 
+def en_casa(lat, lon) -> bool | None:
+    """True/False según HOME_RADIUS_M; None si falta la ubicación o el punto «Casa» (o es ilegible)."""
+    if lat in (None, "") or lon in (None, "") or not (config.HOME_LAT and config.HOME_LON):
+        return None
+    try:
+        return _distancia_m(float(lat), float(lon), float(config.HOME_LAT),
+                            float(config.HOME_LON)) <= config.HOME_RADIUS_M
+    except ValueError:
+        return None
+
+
 def punto(lat, lon) -> str:
     """«🏠 Casa» si cae dentro de HOME_RADIUS_M de HOME_LAT/HOME_LON; si no, las coordenadas."""
     if lat in (None, "") or lon in (None, ""):
@@ -57,6 +68,8 @@ def _cerrar_sesion():
     lugar = punto(db.get_state("session_lat"), db.get_state("session_lon"))
     texto = (f"✅ Carga terminada · {soc0:.0f}% → {soc1:.0f}% · ~{kwh:.1f} kWh · ~{cost:.2f} € "
              f"({config.PRICE_EUR_KWH:.3f} €/kWh)\n{lugar} · {_hora(ts0)}–{_hora(ts1)}")
+    import control   # aquí: control importa sessions
+    texto += control.resumen_carga(ts0, soc1)
     with db.conn() as c:
         c.execute("""INSERT INTO charge_sessions(start_ts,end_ts,soc_start,soc_end,kwh_est,cost_eur,source)
                      VALUES(?,?,?,?,?,?, 'kia_soc')""", (ts0, ts1, soc0, soc1, kwh, cost))

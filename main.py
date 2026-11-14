@@ -1,7 +1,7 @@
 """Colector: coche cada N minutos, viajes diarios y resumen semanal por aviso."""
 import logging, time
 from datetime import datetime, timedelta
-import config, db, sessions, settings, stats
+import config, control, db, sessions, settings, stats
 from collectors import kia
 from notify import has_channel, notify
 
@@ -120,6 +120,12 @@ def run():
                 kia_tick()
             except Exception:
                 logging.exception("Error en la lectura del coche")
+
+        if control.activo():
+            try:
+                control.tick()
+            except Exception:
+                logging.exception("Error en el control de carga")
 
         trips_tick(now)
 

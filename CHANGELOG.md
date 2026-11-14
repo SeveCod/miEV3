@@ -1,5 +1,14 @@
 # Cambios
 
+## 0.4.0-beta (2026-11-15)
+
+- **Control de carga por consumo de la casa (opcional, experimental):** con Home Assistant
+  (`HA_URL`, `HA_TOKEN`, `HA_POWER_ENTITY`), pausa la carga cuando la casa consume mucho y la
+  reanuda cuando baja, para que no salte el limitador. Solo actúa con el coche en casa,
+  enchufado, cargando y por debajo de su límite; tope de pausas por carga con aviso; el aviso de
+  «Carga terminada» resume las pausas. Umbrales en ⚙ Ajustes. Guía: `docs/control-carga.md`.
+  Parar y reanudar solo se ha probado en un Kia EV3 de Europa.
+
 ## 0.3.1-beta (2026-11-14)
 
 Condiciones de la revisión final antes de publicar.
