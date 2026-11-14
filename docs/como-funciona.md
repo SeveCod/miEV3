@@ -124,8 +124,8 @@ la proyección de km al año.
 
 ## Lo que no está verificado
 
-- **Energía recuperada (frenada regenerativa):** el panel la muestra, pero sus cifras no cuadran
-  con el balance de batería. Está marcada «pendiente de aclarar».
+- **Energía recuperada (frenada regenerativa):** se guarda, pero sus cifras no cuadran con el
+  balance de batería, así que el panel no la muestra hasta poder verificarla.
 - **Estado «cargando» en coches CCS2** (como el EV3): la librería lo deduce y a veces no lo sabe.
   En ese caso se mantiene el estado anterior para no cerrar una carga en falso.
 - **Otros modelos y regiones:** solo se ha probado con Kia en Europa.

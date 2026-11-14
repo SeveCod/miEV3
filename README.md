@@ -34,6 +34,16 @@ Conectar con el coche y peculiaridades de la API: [docs/conectar-api.md](docs/co
 Cómo se calcula cada cifra: [docs/como-funciona.md](docs/como-funciona.md).
 Cada ajuste explicado: [docs/ajustes.md](docs/ajustes.md).
 
+## Requisitos
+
+- Una máquina encendida siempre (VPS, Raspberry Pi, mini PC) con **Linux o macOS**. En Windows,
+  dentro de WSL.
+- **Python 3.11 o superior** (`python3 --version`). En Debian/Ubuntu: `sudo apt install python3 python3-venv`.
+  Si tienes varias versiones: `PYTHON=python3.12 ./install.sh`.
+- Para que arranque solo y se reinicie si falla, **pm2**, que necesita **Node.js**. Es opcional:
+  también puedes arrancarlo a mano o con systemd.
+- La cuenta de la app **Kia Connect** con el coche dado de alta.
+
 ## Instalación
 
 ```bash
@@ -60,19 +70,29 @@ Cuando la conexión funcione, arranca los dos procesos: el colector, que lee el 
 panel.
 
 ```bash
-npm install -g pm2                        # si no lo tienes
+npm install -g pm2                        # si no lo tienes (necesita Node.js)
 pm2 start ecosystem.config.js && pm2 save
+pm2 startup                               # una vez: arranca MiEV3 al encender la máquina (sigue lo que indique)
 ```
 
-En `ecosystem.config.js`, cambia `TZ` si no vives en la zona horaria de Madrid.
+Si no vives en la zona horaria de Madrid, cambia `TZ` en `.env`.
 
 ### Abrir el panel
 
 La API escucha solo en `127.0.0.1:8090`. Tienes dos maneras de abrirla:
 
 - **Desde tu ordenador:** `ssh -L 8090:localhost:8090 tu-servidor` y abre http://localhost:8090.
-- **Desde el móvil:** ponla detrás de nginx o Caddy con HTTPS. Deja `/ingest/v2c` fuera de la
-  contraseña si usas el agente del Trydan, porque ese endpoint se protege con su propio token.
+- **Desde el móvil:** ponla detrás de un proxy con HTTPS. Lo más sencillo es
+  [Caddy](https://caddyserver.com), que saca el certificado solo. Con un dominio que apunte a tu
+  máquina, este `Caddyfile` basta (la contraseña ya la pide MiEV3):
+
+  ```
+  coche.tudominio.com {
+      reverse_proxy 127.0.0.1:8090
+  }
+  ```
+  Si añades contraseña también en el proxy, deja `/ingest/v2c` fuera: el agente del Trydan se
+  identifica con su propio token.
 
 Usuario y contraseña: `DASH_USER` y `DASH_PASS` del `.env`. La contraseña necesita al menos 8
 caracteres, sin ñ ni tildes (el acceso HTTP Basic no las admite); si no cumple, el panel no deja
@@ -153,13 +173,51 @@ en el panel cuando llegan datos.
 - Para la foto del coche en la cabecera, deja tu imagen en `static/img/car.webp`. Sin ella, el
   hueco no aparece.
 
+## Actualizar
+
+```bash
+cd miEV3
+git pull
+./install.sh                                   # instala las dependencias nuevas; no toca tu .env
+pm2 restart miev3-api miev3-collector
+```
+
+La base de datos se actualiza sola al arrancar. Antes de actualizar, conviene hacer una copia
+(abajo). Qué cambia en cada versión: [CHANGELOG.md](CHANGELOG.md). Tu configuración vive en `.env`
+y en la base de datos, no en ficheros del repositorio, así que `git pull` no choca con ella.
+
+## Copia de seguridad
+
+Todo lo tuyo está en dos ficheros: `.env` (cuenta y contraseñas) y `miev3.db` (lecturas, cargas,
+viajes y ajustes). Para copiar la base de datos con la app en marcha:
+
+```bash
+venv/bin/python -c "import sqlite3; sqlite3.connect('miev3.db').backup(sqlite3.connect('copia-miev3.db'))"
+```
+
+Guarda la copia y el `.env` fuera de la máquina. Para restaurar: para MiEV3, pon la copia como
+`miev3.db` y arráncalo.
+
+## Fallos y sugerencias
+
+Es una beta: si algo falla o echas algo en falta, abre una
+[incidencia en GitHub](https://github.com/SeveCod/miEV3/issues). Ayuda mucho incluir la versión
+(`cat VERSION`), el modelo y país del coche y las últimas líneas de `pm2 logs miev3-collector`.
+**Antes de pegar logs, borra tu correo, tu contraseña y tus coordenadas.**
+
 ## Desarrollo
 
 ```bash
-venv/bin/pip install pytest httpx
+venv/bin/pip install -r requirements-dev.txt
 venv/bin/pytest            # usa coches simulados y bases de datos temporales, sin red
 ```
 
-Estructura: `main.py` (colector), `api.py` (API y panel), `settings.py` (ajustes editables),
-`sessions.py` (cargas y avisos de batería), `collectors/kia.py` (lectura del coche),
-`notify.py` (avisos), `db.py` (esquema) y `static/index.html` (panel, sin compilación).
+Los tests corren también en GitHub Actions en cada push. Estructura: `main.py` (colector),
+`api.py` (API y panel), `settings.py` (ajustes editables), `sessions.py` (cargas y avisos de
+batería), `collectors/kia.py` (lectura del coche), `notify.py` (avisos), `db.py` (esquema y
+migraciones), `static/index.html` y `static/app.js` (panel, sin compilación).
+
+## Licencia
+
+[MIT](LICENSE). Proyecto independiente, sin relación con Kia ni con los autores de
+`hyundai_kia_connect_api`.

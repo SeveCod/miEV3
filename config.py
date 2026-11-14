@@ -1,10 +1,14 @@
 """Configuración: valores de .env (o por defecto). Los ajustes de negocio pueden cambiarse
 después desde el panel (⚙ Ajustes): settings.load() los superpone a estos atributos."""
-import logging, math, os
+import logging, math, os, time
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
+# TZ del .env manda en todo el proceso (horarios del colector y días locales); así no hay que
+# repetirla en ecosystem.config.js
+if os.getenv("TZ") and hasattr(time, "tzset"):
+    time.tzset()
 
 def _f(k, d, cast=float):
     """Número de .env. Acepta coma decimal; si es ilegible o no finito, avisa y usa el defecto

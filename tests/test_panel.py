@@ -1,8 +1,8 @@
-"""Guardia estática del panel: toda función render*/helper llamada en index.html está definida."""
+"""Guardia estática del panel: toda función render*/helper llamada en app.js está definida."""
 import re
 from pathlib import Path
 
-HTML = (Path(__file__).resolve().parents[1] / "static" / "index.html").read_text()
+HTML = (Path(__file__).resolve().parents[1] / "static" / "app.js").read_text()
 
 
 def test_render_llamadas_definidas():

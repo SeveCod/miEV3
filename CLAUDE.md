@@ -19,7 +19,7 @@ sessions.py        cargas por transición de «cargando», unión de pausas, avi
 collectors/kia.py  hyundai_kia_connect_api, solo estado en caché
 notify.py          Telegram directo → webhook → solo log
 db.py              esquema SQLite y migraciones idempotentes
-static/index.html  panel e informes (HTML + JS sin compilación, Chart.js por CDN); PDF = imprimir del navegador
+static/index.html  panel e informes (HTML + CSS); static/app.js su JS (sin compilación, Chart.js por CDN con SRI); PDF = imprimir del navegador
 scripts/seed_demo.py  base de datos de demostración
 ```
 
@@ -40,7 +40,10 @@ scripts/seed_demo.py  base de datos de demostración
 - **Robustez:** los fallos del coche o del aviso se registran y el colector sigue. Usar `getattr`
   defensivo, porque los atributos de la librería cambian entre versiones.
 - **Login UE roto:** antes de tocar credenciales, mirar las releases e issues de la librería y
-  subir la versión fijada en `requirements.txt`.
+  subir la versión fijada en `requirements.txt` (nueva versión de MiEV3: `VERSION` + `CHANGELOG.md`).
+- **Esquema:** un cambio de tablas es una migración nueva al final de `db.MIGRATIONS`; nunca
+  editar las existentes. INSERT siempre con nombres de columna.
+- **Web:** nada de JS en línea (la CSP lo bloquea): todo va en `static/app.js`.
 - **Marcas de tiempo:** en UTC con `+00:00` (`db.utcnow()`). `trips.day` y `daily_stats.day` son
   días locales del coche.
 - **Dependencias mínimas:** SQL plano y nada de ORMs ni frameworks de frontend.
@@ -50,7 +53,7 @@ scripts/seed_demo.py  base de datos de demostración
 
 ```bash
 ./install.sh                                           # instalación guiada (venv, .env, prueba)
-venv/bin/pip install pytest httpx                      # para los tests
+venv/bin/pip install -r requirements-dev.txt          # para los tests (CI: .github/workflows/tests.yml)
 venv/bin/pytest                                        # sin red: coche simulado y BD temporal
 DB_PATH=demo.db venv/bin/python scripts/seed_demo.py   # datos de demo
 DB_PATH=demo.db DASH_PASS=demo-miev3 venv/bin/python api.py  # panel con la demo

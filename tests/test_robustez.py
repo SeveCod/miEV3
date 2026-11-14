@@ -184,3 +184,43 @@ def test_fallo_al_procesar_no_cuenta_como_coche_caido(client, monkeypatch):
     monkeypatch.setattr(main.kia, "read", lambda: (_ for _ in ()).throw(ConnectionError("Kia caído")))
     main.kia_tick()
     assert salud == [True, False]
+
+
+# --- Endurecimiento web
+
+def test_cabeceras_de_seguridad_y_sin_docs(client):
+    r = client.get("/")
+    csp = r.headers["Content-Security-Policy"]
+    assert "frame-ancestors 'none'" in csp and "script-src 'self' https://cdnjs.cloudflare.com;" in csp
+    assert r.headers["X-Frame-Options"] == "DENY" and r.headers["X-Content-Type-Options"] == "nosniff"
+    for u in ["/docs", "/redoc", "/openapi.json"]:
+        assert client.get(u).status_code == 404, u
+
+
+def test_estaticos_con_contrasena(client):
+    from fastapi.testclient import TestClient
+    import api
+    anon = TestClient(api.app)
+    for u in ["/app.js", "/img/icon-car.png", "/"]:
+        assert anon.get(u).status_code == 401, u
+        assert client.get(u).status_code == 200, u
+    assert client.get("/app.js").headers["content-type"].startswith("text/javascript")
+    for u in ["/img/..%2F..%2Fapi.py", "/img/no-existe.png", "/img/.env"]:
+        assert client.get(u).status_code == 404, u
+
+
+def test_sin_scripts_en_linea(client):
+    """La CSP no permite JS en línea: todo el código del panel tiene que estar en /app.js."""
+    import re
+    html = client.get("/").text
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html)
+    assert not re.search(r"\son[a-z]+=", html)
+    assert 'integrity="sha512-' in html   # Chart.js con SRI
+
+
+def test_resumen_semanal_solo_se_marca_si_llega(client, monkeypatch):
+    import main
+    monkeypatch.setattr(main, "notify", lambda *a, **k: False)
+    assert main.weekly_summary() is False
+    monkeypatch.setattr(main, "notify", lambda *a, **k: True)
+    assert main.weekly_summary() is True

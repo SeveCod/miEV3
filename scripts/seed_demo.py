@@ -51,8 +51,8 @@ with db.conn() as c:
                   "VALUES (?,?,?,?,?,?,?)", snaps)
     c.execute("UPDATE kia_snapshots SET soh=100, battery_12v=90, charge_limit_ac=80, charge_limit_dc=90, "
               "locked=1, doors_open=0, windows_open=0, batt_temp_min=14, batt_temp_max=16, car_updated_at=ts")
-    c.executemany("INSERT INTO trips VALUES (?,?,?,?,?,?,?)", trips)
-    c.executemany("INSERT INTO daily_stats VALUES (?,?,?,?,?,?,?,?)", daily)
+    c.executemany(f"INSERT INTO trips ({','.join(db.TRIP_COLUMNS)}) VALUES (?,?,?,?,?,?,?)", trips)
+    c.executemany(f"INSERT INTO daily_stats ({','.join(db.DAILY_COLUMNS)}) VALUES (?,?,?,?,?,?,?,?)", daily)
     c.executemany("INSERT INTO charge_sessions (start_ts,end_ts,soc_start,soc_end,kwh_est,cost_eur,source) "
                   "VALUES (?,?,?,?,?,?,'demo')", charges)
 print(f"{config.DB_PATH}: {len(snaps)} lecturas, {len(trips)} viajes, {len(charges)} cargas")

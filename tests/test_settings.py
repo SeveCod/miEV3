@@ -123,3 +123,26 @@ def test_colores_legibles():
     for k, c in settings.CAR_COLORS.items():
         assert ratio(c["accent"], "#FFFFFF") >= 4.5, k
         assert ratio(c["accent_dark"], "#0F1A1D") >= 4.5, k
+
+
+def test_colores_de_texto_legibles_en_todos_los_temas():
+    """--euro, --warn y --soft del panel sobre los fondos teñidos con cada color de coche: ≥ 4,5:1."""
+    import re, settings
+    from pathlib import Path
+    css = (Path(__file__).resolve().parents[1] / "static" / "index.html").read_text()
+    light = dict(re.findall(r"--(euro|warn|soft):(#[0-9A-Fa-f]{6})", css.split("@media screen")[0]))
+    dark = dict(re.findall(r"--(euro|warn|soft):(#[0-9A-Fa-f]{6})", css.split("@media screen")[1].split("}}")[0]))
+    hx = lambda h: [int(h[i:i + 2], 16) for i in (1, 3, 5)]
+    mix = lambda a, b, p: "#" + "".join(f"{round(x * p + y * (1 - p)):02X}" for x, y in zip(hx(a), hx(b)))
+    def lum(h):
+        c = [v / 255 for v in hx(h)]
+        c = [x / 12.92 if x <= 0.03928 else ((x + .055) / 1.055) ** 2.4 for x in c]
+        return .2126 * c[0] + .7152 * c[1] + .0722 * c[2]
+    ratio = lambda a, b: (max(lum(a), lum(b)) + .05) / (min(lum(a), lum(b)) + .05)
+    for c in settings.CAR_COLORS.values():
+        for bg in (mix(c["paint"], "#F1F4F3", .09), mix(c["paint"], "#FBFCFC", .03)):
+            for k in ("euro", "warn", "soft"):
+                assert ratio(light[k], bg) >= 4.5, (k, "claro", c["label"])
+        for bg in (mix(c["paint"], "#0F1A1D", .07), mix(c["paint"], "#142226", .06)):
+            for k in ("euro", "warn", "soft"):
+                assert ratio(dark[k], bg) >= 4.5, (k, "oscuro", c["label"])

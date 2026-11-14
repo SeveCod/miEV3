@@ -24,9 +24,7 @@ def save_daily_stats(rows):
 
 def save_trips(day):
     rows = kia.day_trips(day)
-    with db.conn() as c:
-        c.executemany("""INSERT OR REPLACE INTO trips VALUES
-                         (:day,:start_time,:distance_km,:drive_min,:idle_min,:avg_speed,:max_speed)""", rows)
+    _insert("trips", db.TRIP_COLUMNS, rows)
     logging.info("Viajes %s: %d", day, len(rows))
 
 def kia_health(ok, err=None, now=None):
@@ -83,7 +81,7 @@ def weekly_summary():
         km = c.execute("SELECT COALESCE(MAX(odometer)-MIN(odometer),0) km FROM kia_snapshots WHERE ts>=?",
                        (since,)).fetchone()["km"]
     per100 = s["e"] / km * 100 if km else 0
-    notify(f"📊 Semana · {config.CAR_NAME}\n{km:.0f} km · {s['n']} cargas · ~{s['k']:.0f} kWh · ~{s['e']:.2f} €\n"
+    return notify(f"📊 Semana · {config.CAR_NAME}\n{km:.0f} km · {s['n']} cargas · ~{s['k']:.0f} kWh · ~{s['e']:.2f} €\n"
            f"≈ {per100:.2f} €/100 km (estimado por SoC)",
            "INFO", event_id=f"miev3:semana:{datetime.now().strftime('%G-%V')}")
 
@@ -123,8 +121,8 @@ def run():
 
         week = now.strftime("%G-%V")
         if now.weekday() == 6 and now.hour == 20 and db.get_state("summary_week") != week:
-            weekly_summary()
-            db.set_state("summary_week", week)
+            if weekly_summary():   # si el aviso no llega, se reintenta en la vuelta siguiente
+                db.set_state("summary_week", week)
 
         time.sleep(60)
 

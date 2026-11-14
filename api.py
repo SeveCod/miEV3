@@ -1,18 +1,32 @@
 """API + panel web. Protegido con usuario/contraseña (incluye ubicación del coche)."""
-import json, logging, math, secrets
+import json, logging, math, re, secrets
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from fastapi import FastAPI, Depends, HTTPException, Header, Query, Request
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import config, db, settings
 
-app = FastAPI(title="MiEV3")
+# Sin /docs ni /openapi.json: el panel no necesita describir su API a quien no ha entrado
+app = FastAPI(title="MiEV3", docs_url=None, redoc_url=None, openapi_url=None)
 security = HTTPBasic()
-# Solo static/img: el resto de static/ (catálogo PDF, originales) no se publica
-app.mount("/img", StaticFiles(directory="static/img"), name="img")
+STATIC = Path(__file__).resolve().parent / "static"   # rutas fijas: no dependen del directorio de arranque
+VERSION = (STATIC.parent / "VERSION").read_text().strip()
+
+# CSP sin 'unsafe-inline' para scripts (el JS va en /app.js). Los style="" del panel necesitan
+# 'unsafe-inline' en estilos, que no ejecuta código. frame-ancestors evita incrustar el panel.
+CSP = ("default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; "
+       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+       "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    r = await call_next(request)
+    r.headers.update({"Content-Security-Policy": CSP, "X-Frame-Options": "DENY",
+                      "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"})
+    return r
+
 db.init()
 settings.load()
 
@@ -36,7 +50,20 @@ def rows(sql, *a):
 
 @app.get("/", dependencies=[Depends(auth)])
 def index():
-    return FileResponse("static/index.html")
+    return FileResponse(STATIC / "index.html")
+
+@app.get("/app.js", dependencies=[Depends(auth)])
+def app_js():
+    return FileResponse(STATIC / "app.js", media_type="text/javascript")
+
+@app.get("/img/{name}", dependencies=[Depends(auth)])
+def img(name: str):
+    """Iconos y la foto opcional del coche, también con contraseña (la foto es personal).
+    Solo nombres simples de static/img: nada de rutas ni ficheros de otras carpetas."""
+    f = STATIC / "img" / name
+    if not re.fullmatch(r"[\w.-]+\.(png|webp|jpg|svg)", name) or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f)
 
 @app.get("/api/status", dependencies=[Depends(auth)])
 def status():
@@ -51,7 +78,7 @@ def status():
         since = {"ts": db.get_state("session_start_ts"), "soc": soc0}
     return {"kia": last[0] if last else None, "v2c": v2c[0] if v2c else None,
             "price": config.PRICE_EUR_KWH, "charging_since": since,
-            "photo": Path("static/img/car.webp").is_file()}
+            "photo": (STATIC / "img" / "car.webp").is_file(), "version": VERSION}
 
 @app.get("/api/snapshots", dependencies=[Depends(auth)])
 def snapshots(days: int = Query(7, ge=1, le=3650)):

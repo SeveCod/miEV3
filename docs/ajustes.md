@@ -58,7 +58,7 @@ Notas:
 | `API_PORT` | Puerto local del panel (8090) |
 | `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan (16 caracteres o más; vacío = ingesta desactivada) |
 | `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
-| `TZ` | Zona horaria para agrupar por días. Pon la misma en `ecosystem.config.js` |
+| `TZ` | Tu zona horaria: horarios (viajes 23:45, resumen domingo 20:00) y días locales |
 
 ## Volver a los valores del `.env`
 

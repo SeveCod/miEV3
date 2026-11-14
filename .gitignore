@@ -10,6 +10,7 @@ venv/
 # Originales y catálogo del usuario: solo se versiona lo que se sirve (static/img)
 static/*
 !static/index.html
+!static/app.js
 !static/img/
 .DS_Store
 .claude/

@@ -1,4 +1,4 @@
-import logging, sqlite3
+import logging, os, sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import config
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS daily_stats (
   battery_care_wh REAL, regen_wh REAL, distance_km REAL
 );
 CREATE TABLE IF NOT EXISTS state (k TEXT PRIMARY KEY, v TEXT);
--- Ajustes editados desde el panel (settings.py); se superponen a .env
+-- Ajustes editados desde el panel (settings.py), superpuestos a .env. Sin punto y coma en comentarios
 CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT);
 """
 
@@ -39,6 +39,7 @@ SNAPSHOT_EXTRA = {
 }
 SNAPSHOT_COLUMNS = ("ts", "soc", "charging", "plugged", "range_km", "odometer", "lat", "lon",
                     "battery_12v", "car_updated_at", *SNAPSHOT_EXTRA)
+TRIP_COLUMNS = ("day", "start_time", "distance_km", "drive_min", "idle_min", "avg_speed", "max_speed")
 DAILY_COLUMNS = ("day", "total_wh", "engine_wh", "climate_wh", "electronics_wh",
                  "battery_care_wh", "regen_wh", "distance_km")
 
@@ -67,29 +68,62 @@ def conn():
     finally:
         c.close()
 
-def init():
-    with conn() as c:
-        c.executescript(SCHEMA)
-        have = {r["name"] for r in c.execute("PRAGMA table_info(kia_snapshots)")}
-        for col, typ in SNAPSHOT_EXTRA.items():
-            if col not in have:
-                c.execute(f"ALTER TABLE kia_snapshots ADD COLUMN {col} {typ}")
-        # Migración fila a fila: idempotente aunque api y colector arranquen a la vez
-        for table, col in TS_COLUMNS:
-            for (old,) in c.execute(f"SELECT {col} FROM {table} WHERE {col} NOT LIKE '%+%' "
-                                    f"AND {col} NOT LIKE '%Z'").fetchall():
-                try:
-                    new = _to_utc(old)
-                except (TypeError, ValueError):   # una fila ilegible no debe impedir arrancar
-                    logging.warning("%s.%s ilegible, se deja como está: %r", table, col, old)
-                    continue
-                c.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old))
-        r = c.execute("SELECT v FROM state WHERE k='session_start_ts'").fetchone()
-        if r and _naive(r["v"]):
+def _m1_base(c):
+    """Esquema de la beta 0.1: tablas, columnas añadidas a kia_snapshots y marcas pasadas a UTC
+    (bases anteriores al control de versiones). Idempotente."""
+    for stmt in SCHEMA.split(";"):
+        if stmt.strip():
+            c.execute(stmt)
+    have = {r["name"] for r in c.execute("PRAGMA table_info(kia_snapshots)")}
+    for col, typ in SNAPSHOT_EXTRA.items():
+        if col not in have:
+            c.execute(f"ALTER TABLE kia_snapshots ADD COLUMN {col} {typ}")
+    for table, col in TS_COLUMNS:
+        for (old,) in c.execute(f"SELECT {col} FROM {table} WHERE {col} NOT LIKE '%+%' "
+                                f"AND {col} NOT LIKE '%Z'").fetchall():
             try:
-                c.execute("UPDATE state SET v=? WHERE k='session_start_ts'", (_to_utc(r["v"]),))
-            except ValueError:
-                logging.warning("session_start_ts ilegible: %r", r["v"])
+                new = _to_utc(old)
+            except (TypeError, ValueError):   # una fila ilegible no debe impedir arrancar
+                logging.warning("%s.%s ilegible, se deja como está: %r", table, col, old)
+                continue
+            c.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old))
+    r = c.execute("SELECT v FROM state WHERE k='session_start_ts'").fetchone()
+    if r and _naive(r["v"]):
+        try:
+            c.execute("UPDATE state SET v=? WHERE k='session_start_ts'", (_to_utc(r["v"]),))
+        except ValueError:
+            logging.warning("session_start_ts ilegible: %r", r["v"])
+
+# Migraciones numeradas: la N lleva la base de la versión N-1 a la N (PRAGMA user_version).
+# Un cambio de esquema = una función nueva AL FINAL; las existentes no se tocan nunca.
+MIGRATIONS = (_m1_base,)
+SCHEMA_VERSION = len(MIGRATIONS)
+
+def init():
+    """Aplica las migraciones pendientes en una sola transacción. BEGIN IMMEDIATE hace que, si la
+    API y el colector arrancan a la vez, uno espere al otro (antes podían chocar en un ALTER)."""
+    c = sqlite3.connect(config.DB_PATH, timeout=30, isolation_level=None)
+    c.row_factory = sqlite3.Row
+    try:
+        c.execute("BEGIN IMMEDIATE")
+        version = c.execute("PRAGMA user_version").fetchone()[0]
+        if version > SCHEMA_VERSION:
+            raise RuntimeError(f"La base de datos es de una versión más nueva de MiEV3 (esquema {version}, "
+                               f"este código entiende hasta el {SCHEMA_VERSION}). Actualiza MiEV3.")
+        for n in range(version, SCHEMA_VERSION):
+            MIGRATIONS[n](c)
+            logging.info("Base de datos migrada al esquema %d", n + 1)
+        c.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+        c.execute("COMMIT")
+    except BaseException:
+        c.execute("ROLLBACK")
+        raise
+    finally:
+        c.close()
+    try:   # contiene ubicaciones: solo para el usuario que ejecuta MiEV3
+        os.chmod(config.DB_PATH, 0o600)
+    except OSError as e:
+        logging.warning("No se pudieron ajustar los permisos de %s: %s", config.DB_PATH, e)
 
 def get_state(k, default=None):
     with conn() as c:

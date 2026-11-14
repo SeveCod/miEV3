@@ -54,8 +54,9 @@ Qué hacer, en este orden:
 2. Mira las [issues](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api/issues) y
    [releases](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api/releases) de la
    librería. Casi siempre otro usuario ya lo ha reportado y hay una versión nueva.
-3. Sube la versión en `requirements.txt` y reinstala:
-   `venv/bin/pip install -r requirements.txt && pm2 restart miev3-api miev3-collector`.
+3. **Actualiza MiEV3** (ver «Actualizar» en el README): las versiones nuevas traen la librería al
+   día. Si aún no hay versión de MiEV3 con el arreglo, instala la última librería sin tocar
+   ficheros del repo: `venv/bin/pip install -U hyundai_kia_connect_api && pm2 restart miev3-api miev3-collector`.
 4. Algunas cuentas europeas piden un **refresh token** en lugar de la contraseña, o una
    verificación por código (OTP). Cómo sacarlo lo explica el README de la librería: ponlo en
    `KIA_PASSWORD`. MiEV3 no guarda la sesión, así que cada reinicio vuelve a iniciar sesión.
@@ -76,8 +77,8 @@ Qué hacer, en este orden:
   unos 300 km (ver [cómo funciona](como-funciona.md#consumo-real)).
 - **Viajes sin ruta.** En Europa la nube da cada viaje (hora, km, minutos y velocidades), pero
   no el recorrido. MiEV3 descarga los del día a las 23:45.
-- **Energía recuperada:** aparece en los datos, pero no cuadra con el balance de batería. Está
-  marcada «pendiente de aclarar».
+- **Energía recuperada:** el coche la publica, pero no cuadra con el balance de batería. MiEV3
+  la guarda y no la muestra hasta poder verificarla.
 - **Ubicación:** la posición del coche se guarda en tu base de datos y se ve en el panel. No
   publiques el panel sin HTTPS y contraseña.
 

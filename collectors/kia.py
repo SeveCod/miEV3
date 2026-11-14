@@ -54,7 +54,7 @@ def snapshot(v=None) -> dict:
         "ts": db.utcnow(),
         "soc": g("ev_battery_percentage"),
         # None = desconocido (no confundir con 0). En coches CCS2 (p. ej. Kia EV3) la librería
-        # (v4.35.1) deduce "cargando" del tiempo restante de carga y puede dejarlo en None.
+        # (desde la 4.35) deduce "cargando" del tiempo restante de carga y puede dejarlo en None.
         # TODO verificar con una carga real en cada modelo.
         "charging": _flag(g("ev_battery_is_charging")),
         "plugged": _flag(g("ev_battery_is_plugged_in")),

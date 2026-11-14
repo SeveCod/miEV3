@@ -35,6 +35,7 @@ def test_migra_hora_local_a_utc_una_sola_vez(fresh_db):
         c.execute("INSERT INTO v2c_readings (ts) VALUES ('2026-10-10T12:00:00')")
         c.execute("INSERT INTO charge_sessions (start_ts, end_ts, source) "
                   "VALUES ('2026-10-10T23:00', '2026-10-11T05:00', 'kia_soc')")
+        c.execute("PRAGMA user_version = 0")   # base anterior al control de versiones
     db.set_state("session_start_ts", "2026-10-11T01:15:00")
     db.init()
     db.init()  # idempotente: no vuelve a restar
@@ -79,3 +80,41 @@ def test_snapshots_filtra_por_ventana_utc(fresh_db, monkeypatch):
     from fastapi.testclient import TestClient
     cl = TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})
     assert [s["soc"] for s in cl.get("/api/snapshots?days=1").json()] == [1]
+
+
+def test_migraciones_versionadas(fresh_db, monkeypatch):
+    """Base nueva → esquema actual; una migración nueva se aplica una vez; una base más nueva no
+    se abre a ciegas."""
+    db = fresh_db
+    db.init()
+    with db.conn() as c:
+        assert c.execute("PRAGMA user_version").fetchone()[0] == db.SCHEMA_VERSION
+    llamadas = []
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS + (lambda c: llamadas.append(1),))
+    monkeypatch.setattr(db, "SCHEMA_VERSION", db.SCHEMA_VERSION + 1)
+    db.init(); db.init()
+    assert llamadas == [1]
+    monkeypatch.setattr(db, "SCHEMA_VERSION", 1)
+    monkeypatch.setattr(db, "MIGRATIONS", db.MIGRATIONS[:1])
+    with pytest.raises(RuntimeError, match="más nueva"):
+        db.init()
+
+
+def test_init_concurrente_no_choca(fresh_db):
+    """API y colector arrancan a la vez sobre una base nueva (antes: «duplicate column name»)."""
+    import threading
+    db, errores = fresh_db, []
+    def go():
+        try:
+            db.init()
+        except Exception as e:
+            errores.append(e)
+    hilos = [threading.Thread(target=go) for _ in range(8)]
+    [h.start() for h in hilos]; [h.join() for h in hilos]
+    assert errores == []
+
+
+def test_bd_solo_para_el_usuario(fresh_db):
+    import os, stat, config
+    fresh_db.init()
+    assert stat.S_IMODE(os.stat(config.DB_PATH).st_mode) == 0o600
