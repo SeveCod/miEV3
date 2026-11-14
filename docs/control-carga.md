@@ -30,9 +30,9 @@ Sin estas tres variables, o sin las coordenadas de casa (`HOME_LAT`/`HOME_LON`),
 | Pausar si la casa consume | `LOAD_HIGH_KW` | 1,0 kW | A partir de aquí se pausa la carga |
 | Reanudar si baja de | `LOAD_LOW_KW` | 0,6 kW | Umbral para reanudar |
 | Tiempo por debajo para reanudar | `LOAD_LOW_MIN` | 10 min | Tras este tiempo seguido por debajo, se reanuda |
-| Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 90 min | Pasado este tiempo se reanuda aunque la casa siga alta |
+| Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 90 min | Pasado este tiempo se reanuda, salvo que la casa siga alta: entonces se alarga y avisa |
 | Potencia del cargador de casa | `LOAD_CHARGER_MAX_KW` | 7,4 kW | Una carga más potente no es la de casa y no se toca |
-| Pausas como mucho por carga | `LOAD_MAX_PAUSES` | 4 | Al llegar, avisa y deja de pausar en esa carga |
+| Pausas como mucho por carga | `LOAD_MAX_PAUSES` | 8 | Al llegar, avisa y deja de pausar en esa carga |
 
 Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*, con algo de margen.
 
@@ -45,8 +45,8 @@ Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*,
   guarda el colector cada `KIA_INTERVAL_MIN`. A Home Assistant solo se le pregunta si esa lectura
   dice que el coche carga en casa por debajo de su límite, o durante una pausa. Con la batería en
   su límite, sin cargar o fuera de casa, no hay llamadas ni avisos.
-- Solo reanuda una carga que pausó él. Una pausa nunca dura más que la pausa máxima, aunque Home
-  Assistant no responda. Una pausa del control no parte la carga en dos.
+- Solo reanuda una carga que pausó él. A la pausa máxima reanuda si la casa ya bajó o Home Assistant
+  no responde; si la casa sigue alta, alarga la pausa y avisa una vez. Una pausa del control no parte la carga en dos.
 - Si una orden falla tres veces seguidas, avisa y no insiste en esa carga.
 - El aviso de «Carga terminada» dice cuántas pausas hubo y si la batería se quedó por debajo
   del límite de carga del coche.

@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.4.2-beta (2026-11-15)
+
+- **Control de carga:** a la pausa máxima ya no reanuda si la casa sigue alta (horno, estufa):
+  alarga la pausa y avisa una vez. Reanuda si la casa bajó o Home Assistant no responde.
+- `LOAD_MAX_PAUSES` pasa de 4 a 8 por defecto: una carga nocturna de 6–7 h puede coincidir con
+  varios picos.
+
 ## 0.4.1-beta (2026-11-15)
 
 - **Control de carga más simple y con menos llamadas:** decide con la última lectura guardada

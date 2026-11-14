@@ -33,7 +33,7 @@ valor por defecto) y queda un aviso en el log. Se admite la coma decimal (`0,15`
 | Radio de casa | `HOME_RADIUS_M` | 10–10.000 m | Distancia que todavía cuenta como casa |
 | Pausar si la casa consume | `LOAD_HIGH_KW` | 0,1–30 kW | Control de carga con Home Assistant ([control-carga.md](control-carga.md)) |
 | Reanudar si baja de / Tiempo por debajo para reanudar | `LOAD_LOW_KW`, `LOAD_LOW_MIN` | 0–30 kW / 1–120 min | Control de carga: cuándo se reanuda |
-| Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 10–600 min | Control de carga: tope de cada pausa |
+| Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 10–600 min | Control de carga: a este tiempo reanuda, salvo que la casa siga alta (alarga y avisa) |
 | Potencia del cargador de casa | `LOAD_CHARGER_MAX_KW` | 1–22 kW | Control de carga: solo actúa en casa y hasta esta potencia (nunca en un cargador público) |
 | Pausas como mucho por carga | `LOAD_MAX_PAUSES` | 1–20 | Control de carga: al llegar, avisa y deja de pausar |
 

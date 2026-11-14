@@ -88,7 +88,7 @@ FIELDS = (
     Field("LOAD_LOW_KW", "Reanudar si baja de", LOAD_GROUP, "float", 0, 30, "kW"),
     Field("LOAD_LOW_MIN", "Tiempo por debajo para reanudar", LOAD_GROUP, "float", 1, 120, "min"),
     Field("LOAD_PAUSE_MAX_MIN", "Pausa máxima", LOAD_GROUP, "float", 10, 600, "min",
-          help="Pasado este tiempo la carga se reanuda aunque la casa siga alta."),
+          help="Pasado este tiempo se reanuda, salvo que la casa siga alta (entonces se alarga y avisa)."),
     Field("LOAD_CHARGER_MAX_KW", "Potencia del cargador de casa", LOAD_GROUP, "float", 1, 22, "kW",
           help="Solo se controla una carga en casa que no pase de esta potencia; así nunca se toca "
           "un cargador público."),
