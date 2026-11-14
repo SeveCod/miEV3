@@ -86,7 +86,9 @@ def process(snap: dict):
     pausa = db.get_state("session_pause_ts")
 
     if now_charging and not prev_charging:
-        if pausa and _minutos(pausa, ts) < config.CHARGE_MERGE_GAP_MIN:
+        # Una pausa del control de carga (control.py) tampoco parte la carga
+        if pausa and (_minutos(pausa, ts) < config.CHARGE_MERGE_GAP_MIN
+                      or (db.get_state("load_resumed_at") or "") > pausa):
             db.set_state("session_pause_ts", "")  # se reanuda la misma carga
         else:
             if pausa:
@@ -100,7 +102,8 @@ def process(snap: dict):
         db.set_state("session_pause_ts", ts)
         db.set_state("session_end_soc", soc)
 
-    elif not now_charging and pausa and _minutos(pausa, ts) >= config.CHARGE_MERGE_GAP_MIN:
+    elif not now_charging and pausa and _minutos(pausa, ts) >= config.CHARGE_MERGE_GAP_MIN \
+            and not db.get_state("load_paused_at") and (db.get_state("load_resumed_at") or "") <= pausa:
         _cerrar_sesion()
 
     if soc <= config.LOW_SOC_ALERT and not snap["plugged"] and db.get_state("low_alert") != "1":

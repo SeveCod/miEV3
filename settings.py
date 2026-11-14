@@ -89,6 +89,9 @@ FIELDS = (
     Field("LOAD_LOW_MIN", "Tiempo por debajo para reanudar", LOAD_GROUP, "float", 1, 120, "min"),
     Field("LOAD_PAUSE_MAX_MIN", "Pausa máxima", LOAD_GROUP, "float", 10, 600, "min",
           help="Pasado este tiempo la carga se reanuda aunque la casa siga alta."),
+    Field("LOAD_CHARGER_MAX_KW", "Potencia del cargador de casa", LOAD_GROUP, "float", 1, 22, "kW",
+          help="Solo se controla una carga en casa que no pase de esta potencia; así nunca se toca "
+          "un cargador público."),
     Field("LOAD_MAX_PAUSES", "Pausas como mucho por carga", LOAD_GROUP, "int", 1, 20),
 )
 BY_KEY = {f.key: f for f in FIELDS}

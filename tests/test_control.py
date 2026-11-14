@@ -1,6 +1,6 @@
-"""Control de carga por consumo de la casa (control.py) con un coche simulado.
+"""Control de carga por consumo de la casa (control.py): decide con la última lectura guardada
+y solo pregunta a Home Assistant cuando hay una carga que proteger.
 Caso real (EV3, 2026-11): coche a 5,7 kW + termo 1,7 kW → el limitador de 6 kW saltó tres veces."""
-from types import SimpleNamespace
 import pytest
 
 CASA = (40.0, -3.0)            # punto ficticio
@@ -16,196 +16,159 @@ def t(minutos: int) -> str:
 def env(tmp_path, monkeypatch):
     import config, db, control
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "HOME_LAT", str(CASA[0]))
-    monkeypatch.setattr(config, "HOME_LON", str(CASA[1]))
-    monkeypatch.setattr(config, "LOAD_PAUSE_MAX_MIN", 90.0)
-    monkeypatch.setattr(config, "LOAD_REQ_MAX_AGE_MIN", 10.0)
-    monkeypatch.setattr(config, "LOAD_MAX_PAUSES", 4)
+    for k, v in (("HOME_LAT", str(CASA[0])), ("HOME_LON", str(CASA[1])), ("LOAD_PAUSE_MAX_MIN", 90.0),
+                 ("LOAD_MAX_PAUSES", 4), ("LOAD_HIGH_KW", 1.0), ("LOAD_LOW_KW", 0.6),
+                 ("LOAD_LOW_MIN", 10.0), ("LOAD_CHARGER_MAX_KW", 7.4),
+                 ("HA_URL", "http://ha"), ("HA_TOKEN", "x"), ("HA_POWER_ENTITY", "sensor.casa")):
+        monkeypatch.setattr(config, k, v)
     db.init()
-    car = SimpleNamespace(location_latitude=CASA[0], location_longitude=CASA[1],
-                          ev_battery_is_plugged_in=True, ev_battery_is_charging=True,
-                          ev_battery_percentage=50, ev_charge_limits_ac=80,
-                          ev_charging_power=5.7, ev_estimated_current_charge_duration=200, fail=0)
+    db.set_state("session_start_ts", "2026-11-14T14:00:00+00:00")
+    casa = {"kw": 0.2, "lecturas": 0}
     ordenes, avisos = [], []
 
+    def potencia():
+        casa["lecturas"] += 1
+        return casa["kw"]
+
     def charge(start):
-        if car.fail:
-            car.fail -= 1
+        if casa.get("fail"):
+            casa["fail"] -= 1
             raise RuntimeError("Kia 500")
         ordenes.append("start" if start else "stop")
 
-    monkeypatch.setattr(control.kia, "read", lambda: car)
+    monkeypatch.setattr(control, "potencia_casa", potencia)
     monkeypatch.setattr(control.kia, "charge", charge)
+    monkeypatch.setattr(control.kia, "read", lambda: pytest.fail("el control no debe leer el coche"))
     monkeypatch.setattr(control, "notify", lambda text, urgency="TODAY", event_id=None:
                         avisos.append((text, urgency)) or True)
-    return control, car, ordenes, avisos
+    lectura(ts="2026-11-14T14:10:00+00:00")
+    return control, casa, ordenes, avisos
+
+
+def lectura(**kw):
+    """Guarda una lectura del coche: por defecto, cargando en casa a 5,7 kW, al 50 % de 80 %."""
+    import db
+    s = {"ts": "2026-11-14T14:10:00+00:00", "soc": 50, "charging": 1, "plugged": 1, "lat": CASA[0],
+         "lon": CASA[1], "charge_power_kw": 5.7, "charge_remaining_min": 200, "charge_limit_ac": 80, **kw}
+    with db.conn() as c:
+        c.execute(f"INSERT OR REPLACE INTO kia_snapshots ({','.join(s)}) VALUES ({','.join('?' * len(s))})",
+                  list(s.values()))
+
+
+def correr(control, casa, desde, hasta, kw):
+    casa["kw"] = kw
+    for m in range(desde, hasta):
+        control.tick(t(m))
 
 
 def test_pausa_y_reanuda_una_vez(env):
-    control, car, ordenes, avisos = env
-    control.request("pause", T0)
-    control.tick(t(1))
-    control.tick(t(2))                      # la misma petición no se repite
-    assert ordenes == ["stop"]
-    control.request("resume", t(15))
-    control.tick(t(16))
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 5, kw=1.7)
+    assert ordenes == ["stop"]                         # solo una vez aunque siga alta
+    correr(control, casa, 5, 16, kw=0.3)              # 10 min por debajo de 0,6
     assert ordenes == ["stop", "start"]
-    assert [u for _, u in avisos] == ["INFO", "INFO"] and "15 min" in avisos[1][0]
+    assert [u for _, u in avisos] == ["INFO", "INFO"]
 
 
-def test_no_pausa_fuera_de_casa_ni_desenchufado(env):
-    control, car, ordenes, _ = env
-    car.location_latitude = 40.4            # ~45 km
-    control.request("pause", T0); control.tick(t(1))
-    car.location_latitude, car.ev_battery_is_plugged_in = CASA[0], False
-    control.request("pause", t(2)); control.tick(t(3))
-    assert ordenes == []
+@pytest.mark.parametrize("cambio", [
+    {"soc": 80},                                       # en su límite: caso real del 14/11
+    {"charging": 0, "charge_power_kw": 0, "charge_remaining_min": 0},   # enchufado sin cargar
+    {"plugged": 0, "charging": 0},
+    {"lat": 40.4},                                     # fuera de casa (~45 km)
+    {"lat": None, "lon": None},                        # ubicación desconocida
+    {"charge_power_kw": 10.7},                         # cargador público AC trifásico
+    {"charge_power_kw": 45.7},                         # cargador rápido DC
+])
+def test_sin_carga_en_casa_no_pregunta_a_ha_ni_al_coche(env, cambio):
+    control, casa, ordenes, avisos = env
+    lectura(ts="2026-11-14T14:20:00+00:00", **cambio)
+    correr(control, casa, 0, 120, kw=1.8)
+    assert ordenes == [] and avisos == [] and casa["lecturas"] == 0
 
 
-def test_no_pausa_enchufado_sin_cargar(env):
-    """Caso real: coche enchufado al 80 % sin cargar; se pausó y la reanudación «de seguridad»
-    habría arrancado una carga que no tocaba."""
-    control, car, ordenes, avisos = env
-    car.ev_battery_is_charging, car.ev_charging_power = False, 0.0
-    car.ev_estimated_current_charge_duration = 0
-    control.request("pause", T0); control.tick(t(1))
-    control.tick(t(95))
-    assert ordenes == [] and avisos == []
-
-
-def test_no_pausa_si_ya_llego_al_limite(env):
-    control, car, ordenes, avisos = env
-    car.ev_battery_percentage = 80
-    control.request("pause", T0); control.tick(t(1))
-    assert ordenes == [] and avisos == []
+def test_sin_casa_configurada_esta_inactivo(env, monkeypatch):
+    control, *_ = env
+    import config
+    monkeypatch.setattr(config, "HOME_LAT", "")
+    assert not control.activo()
 
 
 def test_cargando_desconocido_usa_la_potencia(env):
-    """En CCS2 la librería puede dejar «cargando» en None: vale la potencia de carga."""
-    control, car, ordenes, _ = env
-    car.ev_battery_is_charging = None
-    control.request("pause", T0); control.tick(t(1))
+    control, casa, ordenes, _ = env
+    lectura(ts="2026-11-14T14:20:00+00:00", charging=None)
+    correr(control, casa, 0, 2, kw=1.7)
     assert ordenes == ["stop"]
-    control.request("resume", t(5)); control.tick(t(6))
-    car.ev_charging_power, car.ev_estimated_current_charge_duration = 0, 0
-    control.request("pause", t(30)); control.tick(t(31))
+
+
+def test_tras_reanudar_sigue_vigilando_hasta_la_lectura_siguiente(env):
+    """La lectura guardada es de cuando estaba en pausa (sin cargar); la reanudación cuenta."""
+    control, casa, ordenes, _ = env
+    correr(control, casa, 0, 1, kw=1.7)
+    lectura(ts=t(5), charging=0, charge_power_kw=0, charge_remaining_min=0)   # lectura en pausa
+    correr(control, casa, 1, 12, kw=0.3)
     assert ordenes == ["stop", "start"]
+    correr(control, casa, 12, 14, kw=1.7)
+    assert ordenes == ["stop", "start", "stop"]
 
 
-def test_ubicacion_desconocida_si_pausa(env):
-    control, car, ordenes, _ = env
-    car.location_latitude = car.ev_battery_is_plugged_in = None
-    control.request("pause", T0); control.tick(t(1))
-    assert ordenes == ["stop"]
-
-
-def test_no_reanuda_una_carga_que_no_pauso(env):
-    control, _, ordenes, _ = env
-    control.request("resume", T0); control.tick(t(1))
-    assert ordenes == []
-
-
-def test_peticion_caducada_se_descarta(env):
-    control, _, ordenes, _ = env
-    control.request("pause", T0)
-    control.tick(t(11))                     # el colector estuvo parado 11 min
-    assert ordenes == []
-
-
-def test_reanuda_por_seguridad(env):
-    control, _, ordenes, avisos = env
-    control.request("pause", T0); control.tick(t(1))
-    control.tick(t(90))
-    assert ordenes == ["stop"]
-    control.tick(t(91))                     # 90 min desde la pausa (t(1))
+def test_reanuda_por_seguridad_sin_ha(env):
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 1, kw=1.7)
+    casa["kw"] = None
+    correr(control, casa, 1, 91, kw=None)
     assert ordenes == ["stop", "start"] and avisos[-1][1] == "TODAY"
-    control.tick(t(92))
-    assert ordenes == ["stop", "start"]
 
 
-def test_reintenta_y_avisa_al_agotar(env):
-    control, car, ordenes, avisos = env
-    car.fail = 1
-    control.request("pause", T0)
-    control.tick(t(1)); control.tick(t(2))  # falla una vez y a la segunda pausa
-    assert ordenes == ["stop"] and avisos[-1][1] == "INFO"
-    car.fail = 3
-    control.request("resume", t(10))
-    for m in (11, 12, 13, 14):
-        control.tick(t(m))
-    assert ordenes == ["stop"]              # tres fallos, no se insiste más
-    assert avisos[-1][1] == "TODAY" and "reanudar" in avisos[-1][0]
-    import db
-    assert db.get_state(control.PAUSED) == ""
+def test_reintenta_y_no_insiste_tras_tres_fallos(env):
+    control, casa, ordenes, avisos = env
+    casa["fail"] = 3
+    correr(control, casa, 0, 10, kw=1.7)
+    assert ordenes == [] and avisos[-1][1] == "TODAY" and "pausar" in avisos[-1][0]
+    assert len(avisos) == 1                            # no insiste en esta carga
 
 
 def test_tope_de_pausas_por_carga_avisa_una_vez(env):
-    control, _, ordenes, avisos = env
-    import db
-    db.set_state("session_start_ts", "2026-11-14T14:00:00+00:00")
-    for i in range(6):                      # pausa a los 1+20i min, reanuda a los 10+20i
-        control.request("pause", t(1 + 20 * i)); control.tick(t(2 + 20 * i))
-        control.request("resume", t(10 + 20 * i)); control.tick(t(11 + 20 * i))
+    control, casa, ordenes, avisos = env
+    for i in range(6):
+        correr(control, casa, 20 * i, 20 * i + 1, kw=1.7)
+        correr(control, casa, 20 * i + 1, 20 * i + 13, kw=0.3)
     assert ordenes.count("stop") == 4
-    topes = [a for a in avisos if "no pauso más" in a[0]]
-    assert len(topes) == 1 and topes[0][1] == "TODAY"
-    db.set_state("session_start_ts", "2026-11-15T01:00:00+00:00")   # carga nueva: contador a cero
-    control.request("pause", t(200)); control.tick(t(201))
+    assert len([a for a in avisos if "no pauso más" in a[0]]) == 1
+    import db
+    db.set_state("session_start_ts", "2026-11-15T01:00:00+00:00")   # carga nueva
+    correr(control, casa, 200, 201, kw=1.7)
     assert ordenes.count("stop") == 5
 
 
 def test_umbrales_con_lecturas_reales(env):
-    """Lecturas reales: el termo (1,67 kW) pausa; al bajar a 0,2 kW 10 min se reanuda.
-    Una lectura entre umbrales (0,8) no decide nada."""
-    control, _, ordenes, _ = env
-    for m, kw in ((0, 0.21), (1, 1.67), (6, 1.75), (11, 1.65), (16, 0.35), (21, 0.8),
-                  (26, 0.26), (31, 0.26), (35, 0.23), (36, 0.19)):
-        control.tick(t(m), kw=kw, leer_ha=False)
-        if m == 1:
-            assert ordenes == ["stop"]
+    """Lecturas reales de la casa: el termo (1,67 kW) pausa; 0,8 kW (entre umbrales) no
+    reanuda; 10 min por debajo de 0,6 kW sí."""
+    control, casa, ordenes, _ = env
+    for m, kw in ((0, 0.21), (1, 1.67), (6, 1.75), (16, 0.35), (21, 0.8), (26, 0.26),
+                  (31, 0.26), (35, 0.23), (36, 0.19)):
+        casa["kw"] = kw
+        control.tick(t(m))
         if m == 31:
             assert ordenes == ["stop"]
     assert ordenes == ["stop", "start"]
 
 
-def test_casa_alta_con_coche_fuera_no_lee_el_coche_cada_minuto(env, monkeypatch):
-    control, car, ordenes, _ = env
-    lecturas = []
-    monkeypatch.setattr(control.kia, "read", lambda: lecturas.append(1) or car)
-    car.location_latitude = 40.4
-    for m in range(0, 30):
-        control.tick(t(m), kw=1.8, leer_ha=False)
-    assert ordenes == [] and len(lecturas) == 2   # t(0) y t(15)
-
-
-def test_ha_sin_datos_no_decide(env):
-    control, _, ordenes, _ = env
-    for m in range(5):
-        control.tick(t(m), kw=None, leer_ha=False)
-    assert ordenes == []
-
-
-def test_sin_home_assistant_esta_inactivo(env, monkeypatch):
-    control, *_ = env
-    import config
-    monkeypatch.setattr(config, "HA_URL", "")
-    assert not control.activo() and control.potencia_casa() is None
-
-
-def test_aviso_de_carga_terminada_cuenta_pausas_y_limite(env, monkeypatch):
-    control, car, _, _ = env
-    import db, sessions
+def test_la_pausa_no_parte_la_carga_en_dos(env, monkeypatch):
+    import config, db, sessions
+    control, casa, ordenes, _ = env
+    monkeypatch.setattr(config, "CHARGE_MERGE_GAP_MIN", 60.0)
     avisos = []
     monkeypatch.setattr(sessions, "notify", lambda text, urgency="TODAY", event_id=None:
                         avisos.append(text) or True)
-    ts0 = "2026-11-14T14:00:00+00:00"
-    db.set_state("session_start_ts", ts0)
-    with db.conn() as c:
-        c.execute("INSERT INTO kia_snapshots(ts, soc, charge_limit_ac) VALUES(?,?,?)", (ts0, 50, 80))
-    control.request("pause", T0); control.tick(t(1))
-    control.request("resume", t(20)); control.tick(t(21))
-    for k, v in (("session_start_soc", 50), ("session_pause_ts", t(200)), ("session_end_soc", 72)):
-        db.set_state(k, v)
-    sessions._cerrar_sesion()
-    assert "1 pausa por consumo de la casa (20 min)" in avisos[0]
-    assert "se quedó en 72% de 80%" in avisos[0]
+    db.set_state("charging", "1")
+    db.set_state("session_start_soc", 50)
+    correr(control, casa, 0, 1, kw=1.7)                # pausa en t(0)
+    snap = {"soc": 55, "charging": 0, "plugged": 1, "range_km": 300, "lat": CASA[0], "lon": CASA[1]}
+    for m in (5, 35, 65, 85):                          # lecturas en pausa (> 60 min)
+        sessions.process({**snap, "ts": t(m)})
+    correr(control, casa, 85, 91, kw=None)             # reanuda por seguridad a los 90 min
+    sessions.process({**snap, "ts": t(95), "charging": 1, "soc": 56})
+    sessions.process({**snap, "ts": t(200), "charging": 0, "soc": 70})
+    sessions.process({**snap, "ts": t(300), "charging": 0, "soc": 70})
+    assert len(avisos) == 1 and "50% → 70%" in avisos[0]
+    assert "1 pausa por consumo de la casa (90 min)" in avisos[0]

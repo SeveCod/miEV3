@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.4.1-beta (2026-11-15)
+
+- **Control de carga más simple y con menos llamadas:** decide con la última lectura guardada
+  (sin pedir lecturas extra al coche: menos cupo de API y menos batería de 12 V) y solo pregunta
+  a Home Assistant cuando el coche carga en casa por debajo de su límite o hay una pausa en curso.
+  Con la batería en su límite, sin cargar o fuera de casa: ni llamadas ni avisos.
+- **Solo el cargador de casa:** hace falta la casa configurada y la carga no puede pasar de
+  `LOAD_CHARGER_MAX_KW` (7,4 kW por defecto): nunca actúa en un cargador público.
+- Una pausa del control ya no parte la carga en dos. Quitado `LOAD_REQ_MAX_AGE_MIN`.
+
 ## 0.4.0-beta (2026-11-15)
 
 - **Control de carga por consumo de la casa (opcional, experimental):** con Home Assistant
