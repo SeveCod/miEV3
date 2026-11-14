@@ -49,7 +49,8 @@ scripts/seed_demo.py  base de datos de demostración
 ## Comandos
 
 ```bash
-python3 -m venv venv && venv/bin/pip install -r requirements.txt pytest httpx
+./install.sh                                           # instalación guiada (venv, .env, prueba)
+venv/bin/pip install pytest httpx                      # para los tests
 venv/bin/pytest                                        # sin red: coche simulado y BD temporal
 DB_PATH=demo.db venv/bin/python scripts/seed_demo.py   # datos de demo
 DB_PATH=demo.db DASH_PASS=demo venv/bin/python api.py  # panel con la demo

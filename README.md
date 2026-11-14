@@ -38,13 +38,26 @@ Cada ajuste explicado: [docs/ajustes.md](docs/ajustes.md).
 
 ```bash
 git clone <este-repo> miev3 && cd miev3
+./install.sh
+```
+
+El instalador comprueba que tienes Python 3.11 o superior, instala las dependencias en `./venv` y
+te pide el correo, la contraseña y el PIN de Kia Connect. Con eso crea el `.env`, que solo puede
+leer tu usuario, y genera la contraseña del panel si no le das una. Al final prueba la conexión
+con el coche. Se puede repetir sin miedo: si ya hay un `.env`, no lo toca. Si la prueba falla,
+sigue la [guía de conexión](docs/conectar-api.md).
+
+<details><summary>Instalación a mano</summary>
+
+```bash
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
 cp .env.example .env && nano .env        # cuenta del coche, contraseña del panel, Telegram
 venv/bin/python -c "from collectors import kia; print(kia.snapshot())"   # ¿lee el coche?
 ```
+</details>
 
-Si la última línea imprime tu % de batería, arranca los dos procesos: el colector, que lee el coche
-y avisa, y el panel. Si da error, sigue la [guía de conexión](docs/conectar-api.md).
+Cuando la conexión funcione, arranca los dos procesos: el colector, que lee el coche y avisa, y el
+panel.
 
 ```bash
 npm install -g pm2                        # si no lo tienes
