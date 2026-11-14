@@ -4,6 +4,11 @@
 
 - **Control de carga probado:** en un Kia EV3 de Europa el coche obedece las órdenes de parar y
   reanudar la carga. Deja de marcarse como experimental (otros modelos, sin comprobar).
+- **Control de carga, arranque vigilado:** si la casa está alta, el coche en casa por debajo de
+  su límite y la última lectura tiene más de 10 min, el colector lee el coche en caché (no lo
+  despierta) y pausa si ya carga. Antes, una carga empezada con el termo encendido pasaba hasta
+  30 min sin vigilar, y el limitador salta a los 15–20 min. Como mucho una lectura cada 15 min y
+  12 al día.
 
 ## 0.4.2-beta (2026-11-15)
 
