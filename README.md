@@ -29,7 +29,7 @@ o un mini PC. No hace falta tocar el coche ni instalar nada en él.
 | Viajes del día | Distancia, tiempo, velocidades (sin ruta dibujada) |
 | Avisos | Carga terminada, batería baja sin enchufar, coche sin datos y resumen semanal |
 | Cargador V2C Trydan (opcional) | Agente en casa que envía sus lecturas al panel |
-| Control de carga (opcional, experimental) | Pausa la carga si la casa consume mucho, leyendo Home Assistant: [docs/control-carga.md](docs/control-carga.md) |
+| Control de carga (opcional) | Pausa la carga si la casa consume mucho, leyendo Home Assistant: [docs/control-carga.md](docs/control-carga.md) |
 
 Conectar con el coche y peculiaridades de la API: [docs/conectar-api.md](docs/conectar-api.md).
 Cómo se calcula cada cifra: [docs/como-funciona.md](docs/como-funciona.md).

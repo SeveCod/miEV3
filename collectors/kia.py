@@ -62,7 +62,7 @@ def read():
 
 def charge(start: bool):
     """Orden remota de carga (reanudar o parar). Solo para control.py (control de carga por
-    consumo de la casa), nunca en bucle. TODO verificar: probado solo en un Kia EV3 (UE)."""
+    consumo de la casa), nunca en bucle. Probado en un Kia EV3 (UE); otros modelos: TODO verificar."""
     vm = _manager()
     v = _vehicle(vm)
     return vm.start_charge(v.id) if start else vm.stop_charge(v.id)
