@@ -52,6 +52,7 @@ Notas:
 | `KIA_USER`, `KIA_PASSWORD`, `KIA_PIN` | Cuenta de la app del fabricante. En Europa puede hacer falta un refresh token como contraseña |
 | `CAR_REGION` | 1 Europa, 2 Canadá, 3 EE. UU., 4 China, 5 Australia… (solo probado: 1) |
 | `CAR_BRAND` | 1 Kia, 2 Hyundai, 3 Genesis (solo probado: 1) |
+| `CAR_VIN` | Solo con varios coches en la cuenta: el VIN del que se lee. Vacío = el primero (el log lista los VIN) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Avisos por Telegram |
 | `NOTIFY_URL`, `NOTIFY_SECRET`, `NOTIFY_DRY_RUN` | Avisos por webhook propio (si no hay Telegram) |
 | `DASH_USER`, `DASH_PASS` | Acceso al panel. `DASH_PASS` necesita 8 caracteres o más, sin ñ ni tildes; si no, no entra nadie |

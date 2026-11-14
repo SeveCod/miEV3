@@ -18,7 +18,21 @@ def _manager():
 
 
 def _vehicle(vm):
-    return next(iter(vm.vehicles.values()))
+    """El coche de CAR_VIN o, sin él, el primero de la cuenta (avisando si hay más)."""
+    cars = list(vm.vehicles.values())
+    if not cars:
+        raise RuntimeError("La cuenta no tiene ningún coche: revisa la app, CAR_REGION y CAR_BRAND")
+    if config.CAR_VIN:
+        for v in cars:
+            if (getattr(v, "VIN", None) or "").upper() == config.CAR_VIN.upper():
+                return v
+        raise RuntimeError(f"Ningún coche con CAR_VIN={config.CAR_VIN}; en la cuenta: "
+                           + ", ".join(f"{getattr(v, 'name', '?')} ({getattr(v, 'VIN', '?')})" for v in cars))
+    if len(cars) > 1:
+        logging.warning("La cuenta tiene %d coches; se lee %s. Para elegir otro, pon CAR_VIN en .env: %s",
+                        len(cars), getattr(cars[0], "name", "el primero"),
+                        ", ".join(f"{getattr(v, 'name', '?')} ({getattr(v, 'VIN', '?')})" for v in cars))
+    return cars[0]
 
 
 def _flag(x):

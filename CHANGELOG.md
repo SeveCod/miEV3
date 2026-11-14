@@ -1,5 +1,13 @@
 # Cambios
 
+## 0.3.0-beta (2026-11-14)
+
+- **Resumen semanal con las cifras del panel:** km, viajes, cargas, kWh/100 km, coste en luz y
+  ahorro frente a tu combustible, calculados igual que los informes (módulo `stats.py`).
+- **Cuentas con varios coches:** `CAR_VIN` en `.env` elige cuál se lee; sin él, el log avisa y
+  lista los VIN.
+- **Pruebas del panel en un navegador real** (Playwright) en cada push.
+
 ## 0.2.1-beta (2026-11-14)
 
 - **Requisito corregido:** hace falta Python **3.12** o superior (la librería del coche no instala en 3.11; lo detectó la CI).

@@ -218,6 +218,25 @@ def test_sin_scripts_en_linea(client):
     assert 'integrity="sha512-' in html   # Chart.js con SRI
 
 
+def test_resumen_semanal_con_las_cifras_del_informe(client, monkeypatch):
+    """El aviso semanal y el informe de esos 7 días dan las mismas cifras (antes: fórmulas aparte)."""
+    import db, main, stats
+    from datetime import datetime, timedelta
+    import config
+    hoy = datetime.now(config.LOCAL_TZ).date()
+    with db.conn() as c:
+        for n, km in ((0, 40), (3, 60), (10, 500)):   # el de hace 10 días no cuenta
+            d = (hoy - timedelta(days=n)).strftime("%Y%m%d")
+            c.execute("INSERT INTO trips (day,start_time,distance_km,drive_min) VALUES (?,?,?,30)", (d, "080000", km))
+            c.execute("INSERT INTO daily_stats (day,total_wh,distance_km) VALUES (?,?,?)", (d, km * 150, km))
+    textos = []
+    monkeypatch.setattr(main, "notify", lambda t, *a, **k: textos.append(t) or True)
+    assert main.weekly_summary() is True
+    _, t, _ = stats.period_totals("day", hoy - timedelta(days=6), hoy)
+    assert t["km"] == 100 and "100 km · 2 viajes" in textos[0]
+    assert f"{t['kwh_100']:.1f} kWh/100 km" in textos[0] and "frente a diésel" in textos[0]
+
+
 def test_resumen_semanal_solo_se_marca_si_llega(client, monkeypatch):
     import main
     monkeypatch.setattr(main, "notify", lambda *a, **k: False)

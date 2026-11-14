@@ -20,3 +20,16 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: bash -n install.sh
       - run: pytest -q
+  e2e:
+    # Panel en un navegador real con la demo: errores de consola, scroll horizontal, informe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: pip install -r requirements-dev.txt "playwright>=1.48,<2"
+      - run: python -m playwright install --with-deps chromium
+      - run: pytest -q tests/test_e2e.py

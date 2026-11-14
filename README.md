@@ -214,8 +214,10 @@ venv/bin/pip install -r requirements-dev.txt
 venv/bin/pytest            # usa coches simulados y bases de datos temporales, sin red
 ```
 
-Los tests corren también en GitHub Actions en cada push. Estructura: `main.py` (colector),
-`api.py` (API y panel), `settings.py` (ajustes editables), `sessions.py` (cargas y avisos de
+Los tests corren también en GitHub Actions en cada push, incluida una prueba del panel en un
+navegador real. Para pasarla en local: `venv/bin/pip install playwright && venv/bin/python -m playwright install chromium`
+y `venv/bin/pytest tests/test_e2e.py` (sin Playwright, se salta). Estructura: `main.py` (colector),
+`api.py` (API y panel), `stats.py` (cálculos compartidos), `settings.py` (ajustes editables), `sessions.py` (cargas y avisos de
 batería), `collectors/kia.py` (lectura del coche), `notify.py` (avisos), `db.py` (esquema y
 migraciones), `static/index.html` y `static/app.js` (panel, sin compilación).
 

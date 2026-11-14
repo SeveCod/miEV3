@@ -88,7 +88,8 @@ Qué hacer, en este orden:
 |---|---|---|
 | `AuthenticationError` con la contraseña bien | Cambio en el login del fabricante | Punto 4: actualizar la librería |
 | Pide OTP o código | Cuenta con verificación adicional | Refresh token (README de la librería) |
-| `StopIteration` o ningún vehículo | El coche no está en esa cuenta, o la región o la marca son incorrectas | Revisa la app, `CAR_REGION` y `CAR_BRAND` |
+| «La cuenta no tiene ningún coche» | El coche no está en esa cuenta, o la región o la marca son incorrectas | Revisa la app, `CAR_REGION` y `CAR_BRAND` |
+| Lee otro coche de la cuenta | La cuenta tiene varios | Pon su VIN en `CAR_VIN` (el log del colector lista los que hay) |
 | El panel dice «Aún no hay lecturas» | El colector no está arrancado o falla | `pm2 logs miev3-collector` |
 | Aviso «⚠️ sin datos del coche» | Login roto o nube caída | Punto 4; si la app del móvil tampoco va, es la nube |
 | Los viajes de hoy no salen | Se descargan a las 23:45 | Espera a esa hora |

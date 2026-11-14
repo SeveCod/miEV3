@@ -39,6 +39,8 @@ KIA_PIN = os.getenv("KIA_PIN", "")
 # Solo se ha probado con Kia en Europa (región 1, marca 1).
 CAR_REGION = int(os.getenv("CAR_REGION", "1"))
 CAR_BRAND = int(os.getenv("CAR_BRAND", "1"))
+# Cuenta con varios coches: VIN del que se lee (vacío = el primero, con aviso si hay más)
+CAR_VIN = os.getenv("CAR_VIN", "").strip()
 
 # --- Ajustes editables desde el panel (ver settings.FIELDS) ---
 CAR_NAME = os.getenv("CAR_NAME", "Mi EV3")

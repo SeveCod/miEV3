@@ -1,7 +1,7 @@
 """Colector: coche cada N minutos, viajes diarios y resumen semanal por aviso."""
 import logging, time
-from datetime import datetime, timedelta, timezone
-import config, db, sessions, settings
+from datetime import datetime, timedelta
+import config, db, sessions, settings, stats
 from collectors import kia
 from notify import notify
 
@@ -74,16 +74,17 @@ def trips_tick(now):
         logging.error("Error viajes (intento %d/%d): %s", n + 1, TRIPS_MAX_TRIES, e)
 
 def weekly_summary():
-    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat(timespec="seconds")
-    with db.conn() as c:
-        s = c.execute("SELECT COALESCE(SUM(kwh_est),0) k, COALESCE(SUM(cost_eur),0) e, COUNT(*) n "
-                      "FROM charge_sessions WHERE end_ts>=?", (since,)).fetchone()
-        km = c.execute("SELECT COALESCE(MAX(odometer)-MIN(odometer),0) km FROM kia_snapshots WHERE ts>=?",
-                       (since,)).fetchone()["km"]
-    per100 = s["e"] / km * 100 if km else 0
-    return notify(f"📊 Semana · {config.CAR_NAME}\n{km:.0f} km · {s['n']} cargas · ~{s['k']:.0f} kWh · ~{s['e']:.2f} €\n"
-           f"≈ {per100:.2f} €/100 km (estimado por SoC)",
-           "INFO", event_id=f"miev3:semana:{datetime.now().strftime('%G-%V')}")
+    """Resumen de los últimos 7 días locales (hoy incluido), con las mismas fórmulas que el panel
+    y los informes. Devuelve si el aviso llegó."""
+    last = datetime.now(config.LOCAL_TZ).date()
+    _, t, _ = stats.period_totals("day", last - timedelta(days=6), last)
+    fuel = stats.fuel()
+    lines = [f"📊 Semana · {config.CAR_NAME}",
+             f"{t['km']:.0f} km · {t['trips']} viajes · {t['charges']} cargas ({t['charged_kwh']:.0f} kWh, {t['cost_eur']:.2f} €)"]
+    if t["kwh_100"] is not None:
+        lines.append(f"{t['kwh_100']:.1f} kWh/100 km · ~{t['cost_est_eur']:.2f} € en luz · "
+                     f"ahorro ~{t['saving_eur']:.2f} € frente a {fuel['short']}")
+    return notify("\n".join(lines), "INFO", event_id=f"miev3:semana:{datetime.now().strftime('%G-%V')}")
 
 def kia_tick():
     """Lee el coche y procesa la lectura. Solo un fallo al LEER cuenta para el aviso de «coche sin

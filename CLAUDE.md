@@ -11,7 +11,8 @@ web con el color del coche. Uso: `README.md`. Conexión y API: `docs/conectar-ap
 ```
 main.py            colector: coche cada KIA_INTERVAL_MIN (≥ 30), viajes a las 23:45, resumen el domingo a las 20:00
 api.py             FastAPI en 127.0.0.1:$API_PORT; panel y /api/* con HTTP Basic; /ingest/v2c con X-Token
-                   /api/history y /api/report comparten _aggregate()
+stats.py           cálculos sin HTTP (consumo calibrado, costes, aggregate, period_totals): panel,
+                   informes y resumen semanal usan los mismos
 settings.py        ajustes editables (tabla settings) superpuestos a config; load() en cada vuelta del colector;
                    FUELS (combustibles) y CAR_COLORS (paleta del tema)
 config.py          valores de .env (secretos y valores iniciales)
@@ -48,6 +49,9 @@ scripts/seed_demo.py  base de datos de demostración
   días locales del coche.
 - **Dependencias mínimas:** SQL plano y nada de ORMs ni frameworks de frontend.
 - Lo que dependa de algo no verificado se marca `# TODO verificar` y se cuenta en la respuesta.
+
+- **Verificación de UI:** `tests/test_e2e.py` (Playwright, se salta si no está instalado) corre
+  en CI. La CSP bloquea `eval`: en Playwright usar localizadores, no `wait_for_function`.
 
 ## Comandos
 
