@@ -1,8 +1,9 @@
-# CLAUDE.md — EV Brain
+# CLAUDE.md — MiEV3
 
-Versión para cualquier usuario de un coche eléctrico Kia, Hyundai o Genesis con app conectada. Lee
-la nube del fabricante, estima el coste de las cargas, guarda viajes, compara con diésel, avisa
-por Telegram o webhook y lo muestra en un panel web. Uso: `README.md`. Cálculos:
+App en beta para dueños de un Kia EV3 (y otros eléctricos Kia, Hyundai o Genesis con app
+conectada). Lee la nube del fabricante, estima el coste de las cargas, guarda viajes, compara con
+gasóleo o gasolina, saca informes en PDF, avisa por Telegram o webhook y lo muestra en un panel
+web con el color del coche. Uso: `README.md`. Conexión y API: `docs/conectar-api.md`. Cálculos:
 `docs/como-funciona.md`. Ajustes: `docs/ajustes.md`.
 
 ## Arquitectura
@@ -10,13 +11,15 @@ por Telegram o webhook y lo muestra en un panel web. Uso: `README.md`. Cálculos
 ```
 main.py            colector: coche cada KIA_INTERVAL_MIN (≥ 30), viajes a las 23:45, resumen el domingo a las 20:00
 api.py             FastAPI en 127.0.0.1:$API_PORT; panel y /api/* con HTTP Basic; /ingest/v2c con X-Token
-settings.py        ajustes editables (tabla settings) superpuestos a config; load() en cada vuelta del colector
+                   /api/history y /api/report comparten _aggregate()
+settings.py        ajustes editables (tabla settings) superpuestos a config; load() en cada vuelta del colector;
+                   FUELS (combustibles) y CAR_COLORS (paleta del tema)
 config.py          valores de .env (secretos y valores iniciales)
 sessions.py        cargas por transición de «cargando», unión de pausas, aviso de batería baja
 collectors/kia.py  hyundai_kia_connect_api, solo estado en caché
 notify.py          Telegram directo → webhook → solo log
 db.py              esquema SQLite y migraciones idempotentes
-static/index.html  panel (HTML + JS sin compilación, Chart.js por CDN)
+static/index.html  panel e informes (HTML + JS sin compilación, Chart.js por CDN); PDF = imprimir del navegador
 scripts/seed_demo.py  base de datos de demostración
 ```
 
@@ -29,6 +32,9 @@ scripts/seed_demo.py  base de datos de demostración
   siempre `config.X` en tiempo de llamada (no `from config import X`), para que la recarga funcione.
 - **Panel:** cualquier texto que venga de ajustes o datos se pinta con `textContent`, no con
   `innerHTML`.
+- **Tema:** los colores salen de `settings.CAR_COLORS` (`paint`, `accent`, `accent_dark`); un test
+  exige contraste ≥ 4,5:1. En el CSS, nada de colores fijos de acento: usar `--charge`, `--fill`
+  y `--paint`.
 - **Sin marca:** nada de logos ni fotos del fabricante. La foto opcional del usuario va en
   `static/img/car.webp`, que no se versiona.
 - **Robustez:** los fallos del coche o del aviso se registran y el colector sigue. Usar `getattr`

@@ -38,7 +38,7 @@ def kia_health(ok, err=None, now=None):
     if ok:
         if sent:
             notify(f"✅ {config.CAR_NAME}: vuelve a responder tras {_horas(since, now)} sin datos",
-                   "TODAY", event_id=f"evbrain:kia-ok:{since}")
+                   "TODAY", event_id=f"miev3:kia-ok:{since}")
         if since:
             db.set_state("kia_fail_since", "")
             db.set_state("kia_fail_alerts", 0)
@@ -50,7 +50,7 @@ def kia_health(ok, err=None, now=None):
     if caido_min >= config.KIA_DOWN_ALERT_MIN + sent * config.KIA_DOWN_REPEAT_H * 60:
         notify(f"⚠️ {config.CAR_NAME}: sin datos desde hace {_horas(since, now)} · {str(err)[:200]}\n"
                "Si es de login, mirar releases de hyundai_kia_connect_api antes de tocar credenciales.",
-               "TODAY", event_id=f"evbrain:kia-caido:{since}:{sent}")
+               "TODAY", event_id=f"miev3:kia-caido:{since}:{sent}")
         db.set_state("kia_fail_alerts", sent + 1)
 
 def _horas(desde, hasta):
@@ -85,7 +85,7 @@ def weekly_summary():
     per100 = s["e"] / km * 100 if km else 0
     notify(f"📊 Semana · {config.CAR_NAME}\n{km:.0f} km · {s['n']} cargas · ~{s['k']:.0f} kWh · ~{s['e']:.2f} €\n"
            f"≈ {per100:.2f} €/100 km (estimado por SoC)",
-           "INFO", event_id=f"evbrain:semana:{datetime.now().strftime('%G-%V')}")
+           "INFO", event_id=f"miev3:semana:{datetime.now().strftime('%G-%V')}")
 
 def run():
     db.init()

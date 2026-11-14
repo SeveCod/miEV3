@@ -51,7 +51,7 @@ def _cerrar_sesion():
     notify(f"✅ Carga terminada · {soc0:.0f}% → {soc1:.0f}% · ~{kwh:.1f} kWh · ~{cost:.2f} € "
            f"({config.PRICE_EUR_KWH:.3f} €/kWh)\n"
            f"{lugar} · {_hora(ts0)}–{_hora(ts1)}",
-           "TODAY", event_id=f"evbrain:carga:{ts0}")
+           "TODAY", event_id=f"miev3:carga:{ts0}")
     for k in ("session_start_ts", "session_start_soc", "session_pause_ts",
               "session_end_soc", "session_lat", "session_lon"):
         db.set_state(k, "")
@@ -87,7 +87,7 @@ def process(snap: dict):
 
     if soc <= config.LOW_SOC_ALERT and not snap["plugged"] and db.get_state("low_alert") != "1":
         notify(f"🪫 Batería al {soc:.0f}% y sin enchufar · autonomía {snap['range_km']} km",
-               "TODAY", event_id=f"evbrain:bateria:{ts[:10]}")
+               "TODAY", event_id=f"miev3:bateria:{ts[:10]}")
         db.set_state("low_alert", "1")
     elif soc > config.LOW_SOC_ALERT + 5:
         db.set_state("low_alert", "0")

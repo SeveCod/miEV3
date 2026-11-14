@@ -16,7 +16,7 @@ def notify(text: str, urgency: str = "TODAY", event_id: str | None = None) -> bo
                               headers={"X-Notify-Secret": config.NOTIFY_SECRET},
                               json={"topic": "coche", "urgency": urgency, "parse_mode": "HTML",
                                     "text": html.escape(text, quote=False),
-                                    "event_id": event_id, "source": "evbrain",
+                                    "event_id": event_id, "source": "miev3",
                                     "dry_run": config.NOTIFY_DRY_RUN})
         else:
             logging.info("Aviso sin canal configurado (no enviado): %s", text)

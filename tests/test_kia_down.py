@@ -40,7 +40,7 @@ def test_avisa_a_las_2_horas_una_sola_vez(env):
     assert len(avisos) == 1
     texto, urgencia, eid = avisos[0]
     assert "2 h" in texto and "returned to login page" in texto and urgencia == "TODAY"
-    assert eid.startswith("evbrain:kia-caido:")
+    assert eid.startswith("miev3:kia-caido:")
 
 
 def test_repite_mientras_siga_caido_y_avisa_al_volver(env):

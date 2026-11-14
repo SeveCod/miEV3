@@ -47,7 +47,7 @@ def test_noche_del_21_10_es_una_sola_carga(env):
     assert [tuple(f) for f in filas] == [("2026-10-21T18:18:53+00:00", "2026-10-22T03:19:28+00:00", 61.0, 90.0)]
     assert len(avisos) == 1
     texto, urgencia, event_id = avisos[0]
-    assert urgencia == "TODAY" and event_id == "evbrain:carga:2026-10-21T18:18:53+00:00"
+    assert urgencia == "TODAY" and event_id == "miev3:carga:2026-10-21T18:18:53+00:00"
     assert "61% → 90%" in texto and "~21.1 kWh" in texto and "~2.56 €" in texto
     assert "0.121 €/kWh" in texto and "🏠 Casa" in texto and "20:18–05:19" in texto
 
@@ -63,8 +63,8 @@ def test_pausa_larga_son_dos_cargas(env):
     ])
     with db.conn() as c:
         assert c.execute("SELECT COUNT(*) FROM charge_sessions").fetchone()[0] == 2
-    assert [a[2] for a in avisos] == ["evbrain:carga:2026-10-20T08:00:00+00:00",
-                                      "evbrain:carga:2026-10-20T11:00:00+00:00"]
+    assert [a[2] for a in avisos] == ["miev3:carga:2026-10-20T08:00:00+00:00",
+                                      "miev3:carga:2026-10-20T11:00:00+00:00"]
 
 
 def test_carga_fuera_de_casa_da_coordenadas(env):

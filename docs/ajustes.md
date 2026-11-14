@@ -1,6 +1,6 @@
 # Ajustes
 
-Hay dos sitios para configurar EV Brain:
+Hay dos sitios para configurar MiEV3:
 
 - **⚙ Ajustes en el panel:** lo que cambia con el uso (precios, consumo, umbrales…). Se guarda en
   la base de datos, se aplica sin reiniciar y tiene prioridad sobre el `.env`.
@@ -13,15 +13,16 @@ Si escribes un valor fuera de rango, el panel avisa y no guarda **ningún** camb
 
 | Ajuste | Variable | Rango | Para qué sirve |
 |---|---|---|---|
-| Nombre del coche | `CAR_NAME` | 1–40 caracteres | Título del panel y de los avisos |
+| Nombre del coche | `CAR_NAME` | 1–40 caracteres | Título del panel, de los informes y de los avisos |
+| Color del coche | `CAR_COLOR` | lista | Tiñe el panel y los informes con el color de tu carrocería (ver abajo) |
 | Batería útil | `BATTERY_KWH` | 10–200 kWh | Pasar el % de batería a kWh. Usa la capacidad **neta** de la ficha técnica |
 | Consumo homologado (WLTP) | `WLTP_KWH_100` | 5–40 kWh/100 km | Marca de referencia en los relojes de eficiencia |
 | Precio de la electricidad | `PRICE_EUR_KWH` | 0,001–2 €/kWh | Coste de las cargas nuevas y de los costes estimados. Pon el precio **final**, con impuestos |
 | Eficiencia de carga | `CHARGE_EFFICIENCY` | 0,5–1 | Pérdidas de la carga. 0,90 = el 10 % se pierde por el camino |
 | Pausa que une cargas | `CHARGE_MERGE_GAP_MIN` | 0–600 min | Pausas más cortas no parten la carga en varias |
-| Precio del diésel | `DIESEL_PRICE_EUR_L` | 0,1–5 €/L | Comparación con diésel |
-| Consumo del diésel de referencia | `DIESEL_L_100` | 2–20 L/100 km | Comparación con diésel |
-| Energía de 1 L de diésel | `DIESEL_KWH_PER_L` | 5–15 kWh/L | Solo para el «L/100 km equivalente». Unos 10 kWh/L |
+| Combustible | `FUEL_TYPE` | `diesel` o `gasolina` | Coche de combustión con el que te comparas. Fija también la energía de 1 L para el «L/100 km equivalente»: gasóleo 10,0 kWh/L, gasolina 8,9 kWh/L |
+| Precio del litro | `FUEL_PRICE_EUR_L` | 0,1–5 €/L | Comparación con combustión |
+| Consumo de ese coche | `FUEL_L_100` | 2–20 L/100 km | Comparación con combustión |
 | Aviso de batería baja | `LOW_SOC_ALERT` | 0–100 % | Umbral del aviso 🪫 |
 | Aviso de coche sin datos | `KIA_DOWN_ALERT_MIN` | 30–10.080 min | Tiempo sin poder leer el coche antes de avisar |
 | Repetir ese aviso cada | `KIA_DOWN_REPEAT_H` | 1–168 h | Repetición mientras siga sin datos |
@@ -34,6 +35,10 @@ Notas:
 - El precio de la luz y la eficiencia afectan de forma distinta a lo ya guardado. Las **cargas
   guardadas** conservan su coste. Las **cifras estimadas** del panel (€/100 km, gasto del mes,
   ahorro frente a diésel) se recalculan con los valores nuevos.
+- **Colores:** `neutro` (verde azulado, sin color de coche), `blanco`, `plata`, `gris`, `negro`,
+  `azul`, `verde`, `pistacho`, `terracota` y `naranja`. Son los de catálogo del EV3 europeo y los
+  tonos son **aproximados**: Kia no publica valores de color. El panel usa una versión más oscura
+  o más clara de cada uno para que el texto se lea bien en modo claro y oscuro.
 - Para sacar las coordenadas de casa, haz clic derecho sobre tu casa en Google Maps; el primer
   número es la latitud.
 
@@ -49,7 +54,7 @@ Notas:
 | `DASH_USER`, `DASH_PASS` | Acceso al panel. Sin `DASH_PASS` no entra nadie |
 | `API_PORT` | Puerto local del panel (8090) |
 | `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan |
-| `DB_PATH` | Ruta de la base de datos (`evbrain.db`) |
+| `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
 | `TZ` | Zona horaria para agrupar por días. Pon la misma en `ecosystem.config.js` |
 
 ## Volver a los valores del `.env`
@@ -58,6 +63,6 @@ Un ajuste guardado en el panel tiene prioridad sobre el `.env`. Para volver al v
 bórralo de la base de datos y reinicia:
 
 ```bash
-sqlite3 evbrain.db "DELETE FROM settings WHERE k='PRICE_EUR_KWH'"
+sqlite3 miev3.db "DELETE FROM settings WHERE k='PRICE_EUR_KWH'"
 pm2 restart all
 ```

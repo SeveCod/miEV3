@@ -29,14 +29,14 @@ def test_lista_todos_los_ajustes(client):
 def test_guardar_cambia_config_y_costes(client):
     import config
     r = client.put("/api/settings", json={"CAR_NAME": "  Rayo  ", "PRICE_EUR_KWH": "0,20",
-                                          "CHARGE_EFFICIENCY": 1, "DIESEL_L_100": 6,
-                                          "DIESEL_PRICE_EUR_L": 1.5, "KIA_INTERVAL_MIN": "45"})
+                                          "CHARGE_EFFICIENCY": 1, "FUEL_L_100": 6,
+                                          "FUEL_PRICE_EUR_L": 1.5, "KIA_INTERVAL_MIN": "45"})
     assert r.status_code == 200
     assert config.CAR_NAME == "Rayo" and config.PRICE_EUR_KWH == 0.2 and config.KIA_INTERVAL_MIN == 45
     e = client.get("/api/efficiency").json()
-    # 15 kWh/100 × 0,20 €/kWh = 3 €/100 km; diésel 6 L × 1,5 € = 9 €/100 km → ahorro 6 € en 100 km
+    # 15 kWh/100 × 0,20 €/kWh = 3 €/100 km; combustión 6 L × 1,5 € = 9 €/100 km → ahorro 6 € en 100 km
     assert e["d30"]["eur_100"] == pytest.approx(3.0)
-    assert e["diesel"]["eur_100"] == pytest.approx(9.0)
+    assert e["fuel"]["eur_100"] == pytest.approx(9.0)
     assert e["d30"]["saving_eur"] == pytest.approx(6.0)
 
 
@@ -48,6 +48,8 @@ def test_guardar_cambia_config_y_costes(client):
     {"CAR_NAME": ""},
     {"HOME_LAT": 91},
     {"PRICE_EUR_KWH": "nan"},
+    {"FUEL_TYPE": "gasoil"},         # solo las opciones de la lista
+    {"CAR_COLOR": "#ff0000"},
     {"DASH_PASS": "y"},              # los secretos no se editan desde la web
 ])
 def test_valores_no_validos_422_y_no_guarda_nada(client, data):
@@ -87,3 +89,34 @@ def test_sin_credenciales_401(client):
     from fastapi.testclient import TestClient
     import api
     assert TestClient(api.app).put("/api/settings", json={"CAR_NAME": "x"}).status_code == 401
+
+
+def test_color_y_combustible(client):
+    import config
+    r = client.put("/api/settings", json={"CAR_COLOR": "terracota", "FUEL_TYPE": "gasolina"})
+    assert r.status_code == 200
+    got = {f["key"]: f for f in r.json()}
+    assert got["CAR_COLOR"]["value"] == "terracota" and config.FUEL_TYPE == "gasolina"
+    assert got["CAR_COLOR"]["options"]["terracota"]["accent"].startswith("#")
+    assert set(got["FUEL_TYPE"]["options"]) == {"diesel", "gasolina"}
+
+
+def test_opcion_mala_en_env_no_tumba_el_panel(client, monkeypatch):
+    import config, settings
+    monkeypatch.setattr(config, "FUEL_TYPE", "gasoil")
+    settings.load()
+    assert config.FUEL_TYPE == "diesel"
+    assert client.get("/api/efficiency").status_code == 200
+
+
+def test_colores_legibles():
+    """Texto blanco sobre el color de acento (modo claro) y acento sobre el fondo oscuro: ≥ 4,5:1."""
+    import settings
+    def lum(h):
+        c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    ratio = lambda a, b: (max(lum(a), lum(b)) + .05) / (min(lum(a), lum(b)) + .05)
+    for k, c in settings.CAR_COLORS.items():
+        assert ratio(c["accent"], "#FFFFFF") >= 4.5, k
+        assert ratio(c["accent_dark"], "#0F1A1D") >= 4.5, k

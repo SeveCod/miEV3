@@ -2,7 +2,7 @@
 const env = { TZ: "Europe/Madrid" };
 module.exports = {
   apps: [
-    { name: "evbrain-collector", script: "main.py", interpreter: "./venv/bin/python", cwd: __dirname, env },
-    { name: "evbrain-api", script: "api.py", interpreter: "./venv/bin/python", cwd: __dirname, env }
+    { name: "miev3-collector", script: "main.py", interpreter: "./venv/bin/python", cwd: __dirname, env },
+    { name: "miev3-api", script: "api.py", interpreter: "./venv/bin/python", cwd: __dirname, env }
   ]
 };

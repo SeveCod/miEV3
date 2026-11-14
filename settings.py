@@ -6,8 +6,32 @@ guardar y el colector en cada vuelta (una por minuto), sin reiniciar nada.
 Los secretos (credenciales, contraseñas, tokens) y el puerto NO están aquí: van en .env.
 """
 import logging
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 import config, db
+
+# Combustible del coche con el que te comparas: etiqueta y energía de 1 L (kWh, poder calorífico
+# inferior) para el «L/100 km equivalente».
+FUELS = {
+    "diesel": {"label": "Gasóleo (diésel)", "short": "diésel", "kwh_per_l": 10.0},
+    "gasolina": {"label": "Gasolina", "short": "gasolina", "kwh_per_l": 8.9},
+}
+
+# Colores de carrocería del Kia EV3 (nombres de catálogo europeo; varían por mercado y año).
+# paint = tono aproximado de la pintura, para la muestra; accent / accent_dark = versión legible
+# para la interfaz en modo claro / oscuro (texto blanco sobre accent con contraste ≥ 4,5:1).
+# Los hex son aproximados: no hay valores oficiales publicados.
+CAR_COLORS = {
+    "neutro":    {"label": "Sin color de coche", "paint": "#2F8F83", "accent": "#2B7F75", "accent_dark": "#3BA597"},
+    "blanco":    {"label": "Blanco perla (Snow White Pearl)", "paint": "#ECECE7", "accent": "#4F5A63", "accent_dark": "#C9CFD3"},
+    "plata":     {"label": "Plata (Ivory / Lithium Silver)", "paint": "#B4B8BA", "accent": "#5C6466", "accent_dark": "#B9C0C2"},
+    "gris":      {"label": "Gris pizarra (Shale Grey)", "paint": "#6D716F", "accent": "#555A58", "accent_dark": "#A8AEAB"},
+    "negro":     {"label": "Negro (Aurora Black Pearl / Midnight Black)", "paint": "#1F2226", "accent": "#30363C", "accent_dark": "#AEB6BD"},
+    "azul":      {"label": "Azul hielo (Frost Blue)", "paint": "#A8BFCB", "accent": "#3D6A82", "accent_dark": "#8FB3C6"},
+    "verde":     {"label": "Verde aventurina (Aventurine Green)", "paint": "#3D5A4C", "accent": "#3B6552", "accent_dark": "#7FB39A"},
+    "pistacho":  {"label": "Verde pistacho (Pistachio Green)", "paint": "#BCC9A4", "accent": "#56703A", "accent_dark": "#A9C08A"},
+    "terracota": {"label": "Terracota (Terracotta)", "paint": "#B4634A", "accent": "#9E5039", "accent_dark": "#D98C72"},
+    "naranja":   {"label": "Naranja (Sunset Orange)", "paint": "#D9662E", "accent": "#A84D1C", "accent_dark": "#E8915F"},
+}
 
 
 @dataclass(frozen=True)
@@ -15,16 +39,19 @@ class Field:
     key: str
     label: str
     group: str
-    kind: str              # "text" | "float" | "int" | "coord"
+    kind: str              # "text" | "float" | "int" | "coord" | "choice"
     lo: float | None = None
     hi: float | None = None
     unit: str = ""
     help: str = ""
+    options: dict = field(default_factory=dict)   # solo "choice": clave → {"label", …}
 
 
 FIELDS = (
     Field("CAR_NAME", "Nombre del coche", "Coche", "text", 1, 40,
           help="Aparece en el título del panel y en los avisos."),
+    Field("CAR_COLOR", "Color del coche", "Coche", "choice", options=CAR_COLORS,
+          help="El panel y los informes toman el color de tu carrocería."),
     Field("BATTERY_KWH", "Batería útil", "Coche", "float", 10, 200, "kWh",
           help="Capacidad neta de la ficha técnica. Con ella se pasa el % de batería a kWh."),
     Field("WLTP_KWH_100", "Consumo homologado (WLTP)", "Coche", "float", 5, 40, "kWh/100 km",
@@ -35,12 +62,12 @@ FIELDS = (
           help="Parte de la energía de la red que acaba en la batería (0,85–0,92 en AC)."),
     Field("CHARGE_MERGE_GAP_MIN", "Pausa que une cargas", "Carga", "float", 0, 600, "min",
           help="Tramos separados por menos de esto cuentan como una sola carga."),
-    Field("DIESEL_PRICE_EUR_L", "Precio del diésel", "Comparación con diésel", "float", 0.1, 5, "€/L",
-          help="Para calcular cuánto te ahorras frente a un coche diésel."),
-    Field("DIESEL_L_100", "Consumo del diésel de referencia", "Comparación con diésel", "float", 2, 20, "L/100 km",
-          help="Lo que gastaría un coche diésel equivalente (o el que tenías antes)."),
-    Field("DIESEL_KWH_PER_L", "Energía de 1 L de diésel", "Comparación con diésel", "float", 5, 15, "kWh/L",
-          help="Para el consumo equivalente en L/100 km. Unos 10 kWh/L."),
+    Field("FUEL_TYPE", "Combustible", "Comparación con combustión", "choice", options=FUELS,
+          help="El del coche con el que te comparas (el que tenías antes o uno equivalente)."),
+    Field("FUEL_PRICE_EUR_L", "Precio del litro", "Comparación con combustión", "float", 0.1, 5, "€/L",
+          help="Para calcular cuánto te ahorras frente a ese coche."),
+    Field("FUEL_L_100", "Consumo de ese coche", "Comparación con combustión", "float", 2, 20, "L/100 km",
+          help="Lo que gastaría el coche de combustión en los mismos km."),
     Field("LOW_SOC_ALERT", "Aviso de batería baja", "Avisos", "float", 0, 100, "%",
           help="Avisa una vez si baja de aquí sin estar enchufado."),
     Field("KIA_DOWN_ALERT_MIN", "Aviso de coche sin datos", "Avisos", "float", 30, 10080, "min",
@@ -58,6 +85,11 @@ BY_KEY = {f.key: f for f in FIELDS}
 
 def _parse(f: Field, raw):
     """Valor validado para config, o ValueError con un mensaje legible."""
+    if f.kind == "choice":
+        v = str(raw).strip()
+        if v not in f.options:
+            raise ValueError(f"{f.label}: opción no válida")
+        return v
     if f.kind == "text":
         v = str(raw).strip()
         if not f.lo <= len(v) <= f.hi:
@@ -88,6 +120,12 @@ def load():
             setattr(config, k, _parse(f, v))
         except ValueError as e:
             logging.warning("Ajuste guardado no válido, se ignora: %s", e)
+    # Una opción mal escrita en .env (p. ej. FUEL_TYPE=gasoil) no debe tumbar el panel
+    for f in FIELDS:
+        if f.kind == "choice" and getattr(config, f.key) not in f.options:
+            first = next(iter(f.options))
+            logging.warning("%s=%r no es una opción válida; se usa %r", f.key, getattr(config, f.key), first)
+            setattr(config, f.key, first)
 
 
 def save(data: dict):

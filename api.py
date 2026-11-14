@@ -1,7 +1,7 @@
 """API + panel web. Protegido con usuario/contraseña (incluye ubicación del coche)."""
 import json, secrets
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
 from fastapi.responses import FileResponse
@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import config, db, settings
 
-app = FastAPI(title="EV Brain")
+app = FastAPI(title="MiEV3")
 security = HTTPBasic()
 # Solo static/img: el resto de static/ (catálogo PDF, originales) no se publica
 app.mount("/img", StaticFiles(directory="static/img"), name="img")
@@ -87,19 +87,23 @@ def _soc_factor():
     ok = km >= SOC_MIN_KM and segs >= SOC_MIN_SEGMENTS
     return {"soc_factor": bat / kia if ok else 1.0, "soc_basis_km": km, "soc_segments": segs, "calibrated": ok}
 
-def _diesel_eur_100():
-    return config.DIESEL_L_100 * config.DIESEL_PRICE_EUR_L
+def _fuel():
+    """Coche de combustión de referencia: tipo, consumo, precio y su coste cada 100 km."""
+    f = settings.FUELS[config.FUEL_TYPE]
+    return {"type": config.FUEL_TYPE, "label": f["label"], "short": f["short"], "kwh_per_l": f["kwh_per_l"],
+            "l_100": config.FUEL_L_100, "price_eur_l": config.FUEL_PRICE_EUR_L,
+            "eur_100": config.FUEL_L_100 * config.FUEL_PRICE_EUR_L}
 
 def _eff(wh, km):
     k = _kwh100(wh, km)
     if k is None:
         return {"kwh_100": None, "l_100": None, "eur_100": None, "range_full_km": None, "km": km,
                 "saving_eur": None}
-    eur = _grid_eur(k)
-    # Ahorro frente al diésel de referencia en esos mismos km
-    return {"kwh_100": k, "l_100": k / config.DIESEL_KWH_PER_L, "eur_100": eur,
+    eur, fuel = _grid_eur(k), _fuel()
+    # Ahorro frente al coche de combustión de referencia en esos mismos km
+    return {"kwh_100": k, "l_100": k / fuel["kwh_per_l"], "eur_100": eur,
             "range_full_km": config.BATTERY_KWH / k * 100, "km": km,
-            "saving_eur": (_diesel_eur_100() - eur) * km / 100}
+            "saving_eur": (fuel["eur_100"] - eur) * km / 100}
 
 @app.get("/api/efficiency", dependencies=[Depends(auth)])
 def efficiency():
@@ -124,43 +128,92 @@ def efficiency():
         "breakdown_30d": {k: d30[k] for k in ("engine_wh", "climate_wh", "electronics_wh",
                                               "battery_care_wh", "regen_wh")},
         "wltp_kwh_100": config.WLTP_KWH_100,
-        "diesel_kwh_per_l": config.DIESEL_KWH_PER_L,
-        "diesel": {"l_100": config.DIESEL_L_100, "price_eur_l": config.DIESEL_PRICE_EUR_L,
-                   "eur_100": _diesel_eur_100()},
+        "fuel": _fuel(),
     }
 
 _GROUPS = {"day": "%Y-%m-%d", "week": "%G-W%V", "month": "%Y-%m"}
 
-@app.get("/api/history", dependencies=[Depends(auth)])
-def history(group: Literal["day", "week", "month"] = "month"):
-    """km y tiempo de los viajes, kWh/100 de daily_stats y cargas, agrupados por periodo."""
+def _aggregate(group, first="00000000", last="99999999"):
+    """km y tiempo de los viajes, consumo de daily_stats y cargas por periodo, entre dos días
+    locales (YYYYMMDD, ambos incluidos). Las cargas cuentan en el día en que terminan."""
     fmt = _GROUPS[group]
     key = lambda dt: dt.strftime(fmt)
     out = {}
     def slot(p):
         return out.setdefault(p, {"period": p, "km": 0.0, "trips": 0, "drive_min": 0,
-                                  "wh": 0.0, "wh_km": 0.0, "charged_kwh": 0.0, "cost_eur": 0.0})
-    for t in rows("SELECT day, distance_km, drive_min FROM trips"):
+                                  "wh": 0.0, "wh_km": 0.0, "charged_kwh": 0.0, "cost_eur": 0.0, "charges": 0})
+    for t in rows("SELECT day, distance_km, drive_min FROM trips WHERE day BETWEEN ? AND ?", first, last):
         s = slot(key(_day(t["day"])))
         s["km"] += t["distance_km"] or 0
         s["drive_min"] += t["drive_min"] or 0
         s["trips"] += 1 if (t["distance_km"] or 0) > 0 else 0
-    for d in rows("SELECT day, total_wh, distance_km FROM daily_stats"):
+    for d in rows("SELECT day, total_wh, distance_km FROM daily_stats WHERE day BETWEEN ? AND ?", first, last):
         s = slot(key(_day(d["day"])))
         s["wh"] += d["total_wh"] or 0
         s["wh_km"] += d["distance_km"] or 0
     for c in rows("SELECT end_ts, COALESCE(kwh_meter, kwh_est) kwh, cost_eur FROM charge_sessions"):
-        s = slot(key(datetime.fromisoformat(c["end_ts"]).astimezone(config.LOCAL_TZ)))
+        end = datetime.fromisoformat(c["end_ts"]).astimezone(config.LOCAL_TZ)
+        if not first <= end.strftime("%Y%m%d") <= last:
+            continue
+        s = slot(key(end))
         s["charged_kwh"] += c["kwh"] or 0
         s["cost_eur"] += c["cost_eur"] or 0
+        s["charges"] += 1
     res, f = [], _soc_factor()["soc_factor"]
     for p in sorted(out):
         s = out[p]
         wh = s.pop("wh") * f
-        e = _eff(wh, s.pop("wh_km"))
-        s.update(cost_est_eur=_grid_eur(wh / 1000) if wh else None, kwh_100=e["kwh_100"], l_100=e["l_100"])
+        e = _eff(wh, wh_km := s.pop("wh_km"))
+        s.update(kwh=wh / 1000, kwh_km=wh_km, cost_est_eur=_grid_eur(wh / 1000) if wh else None,
+                 kwh_100=e["kwh_100"], l_100=e["l_100"], saving_eur=e["saving_eur"])
         res.append(s)
     return res
+
+@app.get("/api/history", dependencies=[Depends(auth)])
+def history(group: Literal["day", "week", "month"] = "month"):
+    return _aggregate(group)
+
+def _report_range(period, key):
+    """Primer y último día (date) del informe. key: "2026-W45" (semana ISO) o "2026-11" (mes)."""
+    if period == "week":
+        start = datetime.strptime(key + "-1", "%G-W%V-%u").date()
+        return start, start + timedelta(days=6)
+    if period == "month":
+        start = datetime.strptime(key + "-01", "%Y-%m-%d").date()
+        nxt = (start.replace(day=28) + timedelta(days=4)).replace(day=1)
+        return start, nxt - timedelta(days=1)
+    have = rows("SELECT MIN(day) a FROM (SELECT day FROM trips UNION ALL SELECT day FROM daily_stats)")[0]["a"]
+    return (_day(have).date() if have else date.today()), date.today()
+
+@app.get("/api/report", dependencies=[Depends(auth)])
+def report(period: Literal["week", "month", "all"] = "month", key: str = ""):
+    """Datos de un informe: totales, filas por día (semana/mes) o por mes (histórico) y viajes."""
+    try:
+        first, last = _report_range(period, key)
+    except ValueError:
+        raise HTTPException(422, "Periodo no válido: usa 2026-W45 para semanas o 2026-11 para meses")
+    a, b = first.strftime("%Y%m%d"), last.strftime("%Y%m%d")
+    lines = _aggregate("month" if period == "all" else "day", a, b)
+    tot = {k: sum(r[k] for r in lines) for k in ("km", "trips", "drive_min", "kwh", "kwh_km",
+                                                 "charged_kwh", "cost_eur", "charges")}
+    e, fuel = _eff(tot["kwh"] * 1000 if tot["kwh"] else None, tot["kwh_km"]), _fuel()
+    tot.update(kwh_100=e["kwh_100"], l_100=e["l_100"], eur_100=e["eur_100"],
+               cost_est_eur=_grid_eur(tot["kwh"]) if tot["kwh"] else None,
+               # El ahorro se calcula sobre los km con consumo conocido, igual que el coste estimado
+               fuel_eur=fuel["eur_100"] * tot["kwh_km"] / 100 if tot["kwh"] else None,
+               saving_eur=e["saving_eur"])
+    # Odómetro: primera y última lectura dentro del periodo (en hora local del coche)
+    lo = datetime(first.year, first.month, first.day, tzinfo=config.LOCAL_TZ).astimezone(timezone.utc)
+    hi = lo + timedelta(days=(last - first).days + 1)
+    odo = rows("SELECT MIN(odometer) a, MAX(odometer) b FROM kia_snapshots WHERE odometer IS NOT NULL "
+               "AND ts >= ? AND ts < ?", lo.isoformat(timespec="seconds"), hi.isoformat(timespec="seconds"))[0]
+    trips = [] if period == "all" else rows(
+        "SELECT * FROM trips WHERE day BETWEEN ? AND ? AND distance_km > 0 ORDER BY day, start_time", a, b)
+    return {"period": period, "key": key, "first": a, "last": b, "car_name": config.CAR_NAME,
+            "totals": tot, "odometer": {"start": odo["a"], "end": odo["b"]}, "rows": lines,
+            "trips": trips, "fuel": fuel, "price_eur_kwh": config.PRICE_EUR_KWH,
+            "calibrated": _soc_factor()["calibrated"],
+            "generated": datetime.now(config.LOCAL_TZ).isoformat(timespec="minutes")}
 
 @app.get("/api/insights", dependencies=[Depends(auth)])
 def insights():

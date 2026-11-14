@@ -8,7 +8,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
     monkeypatch.setattr(config, "DASH_USER", "admin")
     monkeypatch.setattr(config, "DASH_PASS", "x")
-    monkeypatch.setattr(config, "DIESEL_KWH_PER_L", 10.0)
+    monkeypatch.setattr(config, "FUEL_TYPE", "diesel")
     monkeypatch.setattr(config, "WLTP_KWH_100", 14.9)
     import db
     db.init()
@@ -112,3 +112,45 @@ def test_status_incluye_carga_en_curso(client):
     with db.conn() as c:
         c.execute("UPDATE kia_snapshots SET charging=0")
     assert client.get("/api/status").json()["charging_since"] is None
+
+
+def test_informe_semanal(client, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "FUEL_L_100", 6.0)
+    monkeypatch.setattr(config, "FUEL_PRICE_EUR_L", 1.5)
+    r = client.get("/api/report?period=week&key=2026-W41").json()   # lunes 05/10 a domingo 11/10
+    assert (r["first"], r["last"]) == ("20261005", "20261011")
+    assert [x["period"] for x in r["rows"]] == ["2026-10-09", "2026-10-10", "2026-10-11"]
+    t = r["totals"]
+    assert t["km"] == 110 and t["trips"] == 3 and t["drive_min"] == 105
+    assert t["kwh"] == pytest.approx(13.2) and t["kwh_100"] == pytest.approx(12.0)
+    assert t["charges"] == 1 and t["charged_kwh"] == pytest.approx(21.4)   # termina el 11/10 en Madrid
+    # Combustión: 6 L × 1,5 € = 9 €/100 km sobre los 110 km con consumo conocido
+    assert t["fuel_eur"] == pytest.approx(9.9)
+    assert t["saving_eur"] == pytest.approx(t["fuel_eur"] - t["cost_est_eur"])
+    assert [x["day"] for x in r["trips"]] == ["20261009", "20261009", "20261010"]
+    assert r["odometer"] == {"start": 1000, "end": 1000}
+
+
+def test_informe_mensual_e_historico(client):
+    m = client.get("/api/report?period=month&key=2026-09").json()
+    assert (m["first"], m["last"]) == ("20260901", "20260930")
+    assert m["totals"]["km"] == 100 and m["totals"]["kwh"] == 0 and m["totals"]["saving_eur"] is None
+    a = client.get("/api/report?period=all").json()
+    assert a["first"] == "20260930" and a["trips"] == []
+    assert [x["period"] for x in a["rows"]] == ["2026-09", "2026-10"]
+    assert a["totals"]["km"] == 210
+
+
+@pytest.mark.parametrize("q", ["period=week&key=2026-11", "period=month&key=noviembre",
+                               "period=month&key=", "period=year&key=2026"])
+def test_informe_periodo_no_valido_422(client, q):
+    assert client.get("/api/report?" + q).status_code == 422
+
+
+def test_gasolina_cambia_equivalencia(client, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "FUEL_TYPE", "gasolina")
+    e = client.get("/api/efficiency").json()
+    assert e["fuel"]["label"] == "Gasolina"
+    assert e["last_day"]["l_100"] == pytest.approx(12.0 / 8.9)

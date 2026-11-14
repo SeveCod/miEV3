@@ -1,13 +1,13 @@
 # Cómo funciona
 
-EV Brain no tiene acceso directo al coche. Cada 30 minutos lee el **último estado que el coche
+MiEV3 no tiene acceso directo al coche. Cada 30 minutos lee el **último estado que el coche
 subió a la nube del fabricante**, a través de la librería
 [hyundai_kia_connect_api](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api). Ese
 estado puede tener minutos u horas: el panel enseña la hora del dato («Dato del coche: …»).
 Todo lo demás se deduce de esas lecturas.
 
 ```
-nube del fabricante ──(cada 30 min)──▶ colector (main.py) ──▶ evbrain.db (SQLite)
+nube del fabricante ──(cada 30 min)──▶ colector (main.py) ──▶ miev3.db (SQLite)
                                          │                         │
                                          └─▶ avisos (Telegram)      └─▶ API + panel (api.py)
 cargador V2C (opcional) ──▶ agente en casa ──▶ POST /ingest/v2c ────┘
@@ -48,7 +48,7 @@ A 0,15 €/kWh, la carga sale por **3,89 €**.
 
 El coche publica su propio contador de energía consumida (por día y acumulado). En el Kia EV3 ese
 contador **se queda corto**, aproximadamente un 23 %, frente a lo que baja de verdad el % de
-batería. Por eso EV Brain lo **calibra** así:
+batería. Por eso MiEV3 lo **calibra** así:
 
 1. Busca tramos **sin cargar** en los que la batería baja al menos un 10 % y el coche recorre al
    menos 30 km.
@@ -67,17 +67,18 @@ El panel muestra estas cifras a partir del consumo:
 |---|---|
 | kWh/100 km | energía (calibrada) ÷ km × 100 |
 | €/100 km | kWh/100 ÷ Eficiencia de carga × Precio de la electricidad |
-| L/100 km equivalente | kWh/100 ÷ Energía de 1 L de diésel (≈ 10 kWh/L). Es una equivalencia de **energía**, no de dinero |
+| L/100 km equivalente | kWh/100 ÷ energía de 1 L del combustible elegido (gasóleo 10,0 kWh/L, gasolina 8,9 kWh/L). Es una equivalencia de **energía**, no de dinero |
 | Autonomía al 100 % | Batería útil ÷ kWh/100 × 100 |
 | Relojes de eficiencia | la marca es tu consumo homologado (WLTP); en verde si estás por debajo y en ámbar si estás por encima |
 
-## Comparación con diésel
+## Comparación con combustión
 
-Defines un coche diésel de referencia, normalmente el que tenías antes o uno equivalente:
+Defines un coche de gasóleo o de gasolina de referencia, normalmente el que tenías antes o uno
+equivalente:
 
 ```
-diésel €/100 km = Consumo del diésel de referencia × Precio del diésel
-ahorro          = (diésel €/100 km − tu €/100 km) × km recorridos ÷ 100
+combustión €/100 km = Consumo de ese coche × Precio del litro
+ahorro              = (combustión €/100 km − tu €/100 km) × km recorridos ÷ 100
 ```
 
 Ejemplo: 5,5 L/100 km × 1,45 €/L = 7,98 €/100 km. Si tu coche sale a 2,50 €/100 km, en 1.000 km
@@ -85,8 +86,23 @@ te ahorras (7,98 − 2,50) × 10 = **54,8 €**.
 
 El resumen muestra el ahorro de los últimos 30 días y desde que el coche es nuevo (con el
 odómetro y el consumo acumulado del coche). Se calcula con los precios **actuales**: si cambias el
-precio del diésel o el de la luz, el ahorro histórico se recalcula entero. **No incluye** cambios
+precio del combustible o el de la luz, el ahorro histórico se recalcula entero. **No incluye** cambios
 de aceite, impuestos, seguro ni la diferencia de precio de compra.
+
+## Informes
+
+Semana (de lunes a domingo), mes o histórico completo. Se calculan con las mismas fórmulas que el
+panel:
+
+- **km, viajes y horas:** suma de los viajes del periodo.
+- **Consumo, energía y coste en luz:** contador del coche × factor de calibración, solo en los días
+  con consumo conocido.
+- **Lo mismo en gasóleo o gasolina y ahorro:** sobre esos mismos km con consumo conocido, para
+  comparar lo mismo con lo mismo.
+- **Cargas:** las que **terminan** dentro del periodo, con el coste guardado de cada una.
+- **Odómetro:** primera y última lectura del periodo.
+
+El PDF lo genera el navegador al imprimir: no hay nada que instalar en el servidor.
 
 ## Viajes
 
