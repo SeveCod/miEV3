@@ -6,7 +6,7 @@ limitada) no parte la carga: al dejar de cargar la sesión queda en pausa y solo
 se cierra —una fila y un único aviso— cuando pasa ese tiempo sin reanudarse.
 Antes cada tramo era una sesión con su «Carga iniciada» y su «Carga terminada»
 (el 21/10/2026, tres sesiones para una noche). Al empezar no se avisa."""
-import math
+import logging, math
 from datetime import datetime
 import db, config
 from notify import notify
@@ -42,12 +42,7 @@ def punto(lat, lon) -> str:
         lat, lon = float(lat), float(lon)
     except ValueError:
         return "📍 ubicación desconocida"
-    try:
-        casa = config.HOME_LAT and config.HOME_LON and _distancia_m(
-            lat, lon, float(config.HOME_LAT), float(config.HOME_LON)) <= config.HOME_RADIUS_M
-    except ValueError:   # casa mal configurada: se ignora
-        casa = False
-    return "🏠 Casa" if casa else f"📍 {lat:.4f}, {lon:.4f}"
+    return "🏠 Casa" if en_casa(lat, lon) else f"📍 {lat:.4f}, {lon:.4f}"
 
 
 def _hora(ts: str) -> str:
@@ -69,7 +64,10 @@ def _cerrar_sesion():
     texto = (f"✅ Carga terminada · {soc0:.0f}% → {soc1:.0f}% · ~{kwh:.1f} kWh · ~{cost:.2f} € "
              f"({config.PRICE_EUR_KWH:.3f} €/kWh)\n{lugar} · {_hora(ts0)}–{_hora(ts1)}")
     import control   # aquí: control importa sessions
-    texto += control.resumen_carga(ts0, soc1)
+    try:   # el control de carga es opcional: un fallo suyo no impide guardar la carga
+        texto += control.resumen_carga(ts0, soc1)
+    except Exception:
+        logging.exception("Resumen del control de carga")
     with db.conn() as c:
         c.execute("""INSERT INTO charge_sessions(start_ts,end_ts,soc_start,soc_end,kwh_est,cost_eur,source)
                      VALUES(?,?,?,?,?,?, 'kia_soc')""", (ts0, ts1, soc0, soc1, kwh, cost))

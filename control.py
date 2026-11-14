@@ -56,21 +56,22 @@ def evaluar(now: str, kw: float | None) -> None:
     if kw is None:
         return
     paused = db.get_state(PAUSED) or ""
+    since = db.get_state(LOW_SINCE) or ""
     if kw >= config.LOAD_HIGH_KW:
-        db.set_state(LOW_SINCE, "")
+        if since:
+            db.set_state(LOW_SINCE, "")
         last = db.get_state(LAST_PAUSE_REQ) or ""
-        if not paused and (not last or _min(last, now) >= PAUSE_REQ_EVERY_MIN):
+        if not paused and (not last or sessions._minutos(last, now) >= PAUSE_REQ_EVERY_MIN):
             db.set_state(LAST_PAUSE_REQ, now)
             request("pause", now)
-    elif kw < min(config.LOAD_LOW_KW, config.LOAD_HIGH_KW):
-        since = db.get_state(LOW_SINCE) or ""
+    elif kw < config.LOAD_LOW_KW:
         if not since:
             db.set_state(LOW_SINCE, now)
             since = now
-        if paused and _min(since, now) >= config.LOAD_LOW_MIN \
+        if paused and sessions._minutos(since, now) >= config.LOAD_LOW_MIN \
                 and not (db.get_state(REQ) or "").startswith("resume|"):
             request("resume", now)
-    else:
+    elif since:
         db.set_state(LOW_SINCE, "")
 
 
@@ -79,10 +80,6 @@ def request(action: str, now: str | None = None) -> str:
     req = f"{action}|{now or db.utcnow()}"
     db.set_state(REQ, req)
     return req
-
-
-def _min(desde: str, hasta: str) -> float:
-    return (datetime.fromisoformat(hasta) - datetime.fromisoformat(desde)).total_seconds() / 60
 
 
 def _cargando(s: dict) -> bool:
@@ -173,12 +170,13 @@ def _reanudar(now: str, por_seguridad: bool) -> bool:
     r = _orden(f"resume@{desde}", start=True)
     if r == "reintentar":
         return False
+    dur = sessions._minutos(desde, now)
     db.set_state(PAUSED, "")
-    db.set_state(PAUSED_MIN, float(db.get_state(PAUSED_MIN) or 0) + _min(desde, now))
+    db.set_state(PAUSED_MIN, float(db.get_state(PAUSED_MIN) or 0) + dur)
     if r == "ok":
         motivo = (f"seguridad: {config.LOAD_PAUSE_MAX_MIN:.0f} min sin señal para reanudar"
                   if por_seguridad else "la casa ya consume poco")
-        notify(f"▶️ {config.CAR_NAME}: carga reanudada tras {_min(desde, now):.0f} min de pausa ({motivo}).",
+        notify(f"▶️ {config.CAR_NAME}: carga reanudada tras {dur:.0f} min de pausa ({motivo}).",
                "TODAY" if por_seguridad else "INFO", event_id=f"miev3:load-resume:{desde}")
     return True
 
@@ -195,9 +193,9 @@ def resumen_carga(ts0: str, soc_final: float) -> str:
     with db.conn() as c:
         row = c.execute("SELECT charge_limit_ac FROM kia_snapshots WHERE charge_limit_ac IS NOT NULL "
                         "ORDER BY ts DESC LIMIT 1").fetchone()
-    limite = row[0] if row else None
-    if limite and soc_final < float(limite) - 1:
-        texto += f" · ⚠️ se quedó en {soc_final:.0f}% de {float(limite):.0f}%"
+    limite = float(row[0]) if row and row[0] else None
+    if limite and soc_final < limite - 1:
+        texto += f" · ⚠️ se quedó en {soc_final:.0f}% de {limite:.0f}%"
     return texto
 
 
@@ -205,19 +203,19 @@ def tick(now: str | None = None, kw: float | None = None, leer_ha: bool = True) 
     now = now or db.utcnow()
     evaluar(now, potencia_casa() if leer_ha else kw)
     paused = db.get_state(PAUSED) or ""
-    if paused and _min(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
+    if paused and sessions._minutos(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
         _reanudar(now, por_seguridad=True)
         return
     req = db.get_state(REQ) or ""
     if not req or req == db.get_state(DONE):
         return
     action, _, ts = req.partition("|")
-    if _min(ts, now) > config.LOAD_REQ_MAX_AGE_MIN:
+    if sessions._minutos(ts, now) > config.LOAD_REQ_MAX_AGE_MIN:
         logging.info("Control de carga: petición caducada %s", req)
         terminado = True
     elif action == "pause":
-        terminado = True if paused else _pausar(now)
+        terminado = bool(paused) or _pausar(now)
     else:  # resume
-        terminado = _reanudar(now, por_seguridad=False) if paused else True
+        terminado = not paused or _reanudar(now, por_seguridad=False)
     if terminado:
         db.set_state(DONE, req)
