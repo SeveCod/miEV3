@@ -42,10 +42,13 @@ Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*,
 - **Solo en el cargador de casa.** La API del coche no da un identificador del cargador, así que
   «el de casa» es: coche dentro del radio de casa y potencia de carga no mayor que
   `LOAD_CHARGER_MAX_KW`. En un cargador público (AC trifásico o rápido DC) nunca actúa.
-- **Mínimas llamadas.** Al coche no se le pide ninguna lectura extra: se decide con la última que
-  guarda el colector cada `KIA_INTERVAL_MIN`. A Home Assistant solo se le pregunta si esa lectura
-  dice que el coche carga en casa por debajo de su límite, o durante una pausa. Con la batería en
-  su límite, sin cargar o fuera de casa, no hay llamadas ni avisos.
+- **Mínimas llamadas.** Se decide con la última lectura que guarda el colector cada
+  `KIA_INTERVAL_MIN`. A Home Assistant solo se le pregunta con el coche en casa por debajo de su
+  límite (cargando, en pausa o con una lectura de más de 10 min). Con la batería en su límite o
+  fuera de casa, no hay llamadas ni avisos.
+- **Arranque vigilado:** si la casa está alta, el coche en casa por debajo de su límite y la
+  última lectura tiene más de 10 min, se lee el coche en caché (no lo despierta) y se pausa si ya
+  carga. Como mucho una lectura cada 15 min y 12 al día.
 - Solo reanuda una carga que pausó él. A la pausa máxima reanuda si la casa ya bajó o Home Assistant
   no responde; si la casa sigue alta, alarga la pausa y avisa una vez. Una pausa del control no parte la carga en dos.
 - Si una orden falla tres veces seguidas, avisa y no insiste en esa carga.
@@ -56,5 +59,5 @@ Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*,
 
 - El sensor de la casa puede actualizarse cada pocos minutos: un pico muy rápido puede hacer
   saltar el limitador antes de que llegue la pausa.
-- El estado del coche es el de la última lectura (cada 30 min por defecto): una carga que
-  empieza justo después de una lectura no se vigila hasta la siguiente.
+- Con el tope de 12 lecturas extra al día agotado, una carga que empieza justo después de una
+  lectura no se vigila hasta la siguiente (cada 30 min por defecto).
