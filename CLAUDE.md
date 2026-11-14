@@ -17,6 +17,8 @@ settings.py        ajustes editables (tabla settings) superpuestos a config; loa
                    FUELS (combustibles) y CAR_COLORS (paleta del tema)
 config.py          valores de .env (secretos y valores iniciales)
 sessions.py        cargas por transición de «cargando», unión de pausas, aviso de batería baja
+control.py         opcional: pausa/reanuda la carga según el consumo de la casa en Home Assistant
+                   (única excepción a «solo caché»: órdenes start/stop_charge, nunca en bucle)
 collectors/kia.py  hyundai_kia_connect_api, solo estado en caché
 notify.py          Telegram directo → webhook → solo log
 db.py              esquema SQLite y migraciones idempotentes

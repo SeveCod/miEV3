@@ -75,6 +75,18 @@ NOTIFY_URL = os.getenv("NOTIFY_URL", "")
 NOTIFY_SECRET = os.getenv("NOTIFY_SECRET", "")
 NOTIFY_DRY_RUN = os.getenv("NOTIFY_DRY_RUN", "") == "1"
 
+# --- Control de carga por consumo de la casa (opcional, experimental; ver docs/control-carga.md) ---
+# Home Assistant con un sensor de potencia de la casa SIN el cargador. Vacío = desactivado.
+HA_URL = os.getenv("HA_URL", "").strip().rstrip("/")
+HA_TOKEN = os.getenv("HA_TOKEN", "")
+HA_POWER_ENTITY = os.getenv("HA_POWER_ENTITY", "").strip()
+LOAD_HIGH_KW = _f("LOAD_HIGH_KW", "1.0")          # casa ≥ esto → pausa la carga
+LOAD_LOW_KW = _f("LOAD_LOW_KW", "0.6")            # casa < esto durante LOAD_LOW_MIN → reanuda
+LOAD_LOW_MIN = _f("LOAD_LOW_MIN", "10")
+LOAD_PAUSE_MAX_MIN = _f("LOAD_PAUSE_MAX_MIN", "90")  # pausa máxima: luego reanuda aunque la casa siga alta
+LOAD_MAX_PAUSES = _f("LOAD_MAX_PAUSES", "4", int)    # pausas como mucho por carga
+LOAD_REQ_MAX_AGE_MIN = _f("LOAD_REQ_MAX_AGE_MIN", "10")  # una petición más vieja ya no se ejecuta
+
 # --- Panel web ---
 DASH_USER = os.getenv("DASH_USER", "admin")
 DASH_PASS = os.getenv("DASH_PASS", "")

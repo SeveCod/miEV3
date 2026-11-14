@@ -31,6 +31,10 @@ valor por defecto) y queda un aviso en el log. Se admite la coma decimal (`0,15`
 | Leer el coche cada | `KIA_INTERVAL_MIN` | 30–1.440 min | No se permite menos de 30, para no agotar el cupo de la API |
 | Latitud / longitud de casa | `HOME_LAT`, `HOME_LON` | vacío o coordenadas | Marca «🏠 Casa» en los avisos de carga |
 | Radio de casa | `HOME_RADIUS_M` | 10–10.000 m | Distancia que todavía cuenta como casa |
+| Pausar si la casa consume | `LOAD_HIGH_KW` | 0,1–30 kW | Control de carga con Home Assistant ([control-carga.md](control-carga.md)) |
+| Reanudar si baja de / Tiempo por debajo para reanudar | `LOAD_LOW_KW`, `LOAD_LOW_MIN` | 0–30 kW / 1–120 min | Control de carga: cuándo se reanuda |
+| Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 10–600 min | Control de carga: tope de cada pausa |
+| Pausas como mucho por carga | `LOAD_MAX_PAUSES` | 1–20 | Control de carga: al llegar, avisa y deja de pausar |
 
 Notas:
 
@@ -58,6 +62,8 @@ Notas:
 | `DASH_USER`, `DASH_PASS` | Acceso al panel. `DASH_PASS` necesita 8 caracteres o más, sin ñ ni tildes; si no, no entra nadie |
 | `API_PORT` | Puerto local del panel (8090) |
 | `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan (16 caracteres o más; vacío = ingesta desactivada) |
+| `HA_URL`, `HA_TOKEN`, `HA_POWER_ENTITY` | Home Assistant para el control de carga (opcional; vacío = apagado) |
+| `LOAD_REQ_MAX_AGE_MIN` | Control de carga: una petición más vieja que esto ya no se ejecuta (10 min) |
 | `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
 | `TZ` | Tu zona horaria: horarios (viajes 23:45, resumen domingo 20:00) y días locales |
 

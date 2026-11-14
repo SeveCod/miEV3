@@ -29,6 +29,7 @@ o un mini PC. No hace falta tocar el coche ni instalar nada en él.
 | Viajes del día | Distancia, tiempo, velocidades (sin ruta dibujada) |
 | Avisos | Carga terminada, batería baja sin enchufar, coche sin datos y resumen semanal |
 | Cargador V2C Trydan (opcional) | Agente en casa que envía sus lecturas al panel |
+| Control de carga (opcional, experimental) | Pausa la carga si la casa consume mucho, leyendo Home Assistant: [docs/control-carga.md](docs/control-carga.md) |
 
 Conectar con el coche y peculiaridades de la API: [docs/conectar-api.md](docs/conectar-api.md).
 Cómo se calcula cada cifra: [docs/como-funciona.md](docs/como-funciona.md).
@@ -149,6 +150,8 @@ Resumen; el detalle está en la [guía de conexión](docs/conectar-api.md).
   ya está arreglado ahí.
 - Solo se lee el **estado en caché** y nunca se fuerza el refresco del coche: forzarlo gasta la
   batería de 12 V y el cupo diario de llamadas. Por eso el intervalo mínimo es de 30 minutos.
+  La única excepción es el control de carga opcional, que manda órdenes de parar o reanudar la
+  carga solo cuando hace falta.
 - Si el coche deja de responder, recibes un aviso a las 2 h, otro cada 12 h y uno cuando vuelve.
 
 ## Cargador V2C Trydan (opcional)
