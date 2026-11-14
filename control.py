@@ -1,4 +1,4 @@
-"""Control de carga por consumo de la casa (opcional, experimental): pausa la carga del coche
+"""Control de carga por consumo de la casa (opcional): pausa la carga del coche
 cuando la casa consume mucho, para que no salte el limitador (ICP) de la potencia contratada.
 
 Necesita Home Assistant con un sensor de la potencia de la casa SIN el cargador (HA_URL,
@@ -7,10 +7,14 @@ minuto.
 
 Mínimas llamadas (cada llamada al coche gasta cupo de la API y batería de 12 V):
 - Solo con el cargador de casa: dentro del radio de casa y sin pasar de LOAD_CHARGER_MAX_KW.
-- Al coche NO se le pregunta nada: se decide con la última lectura guardada, la que el colector
-  hace cada KIA_INTERVAL_MIN. Al coche solo le llegan las órdenes de parar o reanudar.
+- Se decide con la última lectura guardada, la que el colector hace cada KIA_INTERVAL_MIN.
 - A Home Assistant solo se le pregunta si esa lectura dice que el coche carga en casa por debajo
-  de su límite, o si hay una pausa nuestra en curso. Con el coche lleno o sin cargar, nada.
+  de su límite, si hay una pausa nuestra en curso o, con el coche en casa por debajo del límite,
+  si la lectura tiene más de STALE_MIN (una carga puede haber empezado después).
+- Única lectura extra del coche (en caché, no lo despierta): la casa está alta, el coche en casa
+  por debajo de su límite y la lectura guardada tiene más de STALE_MIN. Como mucho una cada
+  REFRESH_EVERY_MIN y REFRESH_MAX_DAY al día. Sin ella, una carga empezada con el termo ya encendido pasaba hasta
+  KIA_INTERVAL_MIN sin vigilar, y el limitador salta a los 15–20 min (caso real del 14/11).
 
 Reglas:
 - Casa ≥ LOAD_HIGH_KW → pausa. Casa < LOAD_LOW_KW durante LOAD_LOW_MIN → reanuda.
@@ -20,15 +24,20 @@ Reglas:
 - Una orden que falla se reintenta en los minutos siguientes; a los MAX_TRIES fallos avisa y
   no insiste en esa carga.
 - Al terminar la carga, «Carga terminada» dice cuántas pausas hubo y si se quedó por debajo del límite.
-# TODO verificar: start_charge/stop_charge solo se han probado en un Kia EV3 (UE).
+Parar y reanudar: probado en un Kia EV3 (UE), el coche obedece (2026-11-15). Otros modelos: TODO verificar.
 """
 import logging
+from datetime import datetime
 import requests
 import config, db, sessions
 from collectors import kia
 from notify import notify
 
 MAX_TRIES = 3
+STALE_MIN = 10            # lectura guardada más vieja que esto: puede haber empezado una carga
+REFRESH_EVERY_MIN = 15    # como mucho una lectura extra del coche cada tanto…
+REFRESH_MAX_DAY = 12      # …y como mucho estas al día (día local)
+REFRESHED, REFRESH_DAY = "load_refreshed_at", "load_refresh_day"
 PAUSED, RESUMED, LOW_SINCE, TRIES = "load_paused_at", "load_resumed_at", "load_low_since", "load_tries"
 EXTENDED = "load_extended"   # pausa (su inicio) ya alargada y avisada
 # Carga en curso (session_start_ts): pausas hechas, minutos en pausa y si ya no se insiste
@@ -77,6 +86,18 @@ def _carga_vigilable(s: dict, ciclo: str) -> bool:
     else:
         cargando = bool(s["charging"])
     return cargando or (db.get_state(RESUMED) or "") > s["ts"]
+
+
+def _puede_empezar(s: dict, ciclo: str, now: str) -> bool:
+    """Coche en casa por debajo de su límite con una lectura vieja: puede estar cargando ya
+    aunque la lectura diga que no (enchufado después de leerla)."""
+    if not s or db.get_state(GIVEN_UP) == ciclo:
+        return False
+    if sessions.en_casa(s.get("lat"), s.get("lon")) is not True:
+        return False
+    if s.get("soc") is not None and s.get("charge_limit_ac") and s["soc"] >= s["charge_limit_ac"]:
+        return False
+    return sessions._minutos(s["ts"], now) > STALE_MIN
 
 
 def _contador(ciclo: str) -> int:
@@ -140,7 +161,8 @@ def _reanudar(now: str, por_seguridad: bool) -> None:
                "TODAY" if por_seguridad else "INFO", event_id=f"miev3:load-resume:{desde}")
 
 
-def tick(now: str | None = None) -> None:
+def tick(now: str | None = None, refrescar=None) -> None:
+    """refrescar: función que lee el coche (en caché) y guarda la lectura; el colector pasa la suya."""
     now = now or db.utcnow()
     paused = db.get_state(PAUSED) or ""
     if paused:
@@ -167,10 +189,30 @@ def tick(now: str | None = None) -> None:
             _reanudar(now, por_seguridad=False)
         return
     ciclo = db.get_state("session_start_ts") or ""
-    if not _carga_vigilable(_ultima_lectura(), ciclo):
+    s = _ultima_lectura()
+    if _carga_vigilable(s, ciclo):
+        kw = potencia_casa()
+        if kw is not None and kw >= config.LOAD_HIGH_KW:
+            _pausar(now, ciclo)
+        return
+    if refrescar is None or not _puede_empezar(s, ciclo, now):
         return                                   # sin carga que proteger: ni HA ni coche
     kw = potencia_casa()
-    if kw is not None and kw >= config.LOAD_HIGH_KW:
+    if kw is None or kw < config.LOAD_HIGH_KW:
+        return
+    ultima = db.get_state(REFRESHED) or ""
+    if ultima and sessions._minutos(ultima, now) < REFRESH_EVERY_MIN:
+        return
+    dia = datetime.fromisoformat(now).astimezone(config.LOCAL_TZ).date().isoformat()
+    d, _, n = (db.get_state(REFRESH_DAY) or "").partition("#")
+    n = int(n) if d == dia else 0
+    if n >= REFRESH_MAX_DAY:
+        return
+    db.set_state(REFRESH_DAY, f"{dia}#{n + 1}")
+    db.set_state(REFRESHED, now)
+    refrescar()
+    ciclo = db.get_state("session_start_ts") or ""
+    if _carga_vigilable(_ultima_lectura(), ciclo):
         _pausar(now, ciclo)
 
 

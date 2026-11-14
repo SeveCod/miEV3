@@ -1,5 +1,10 @@
 # Cambios
 
+## 0.4.3-beta (2026-11-15)
+
+- **Control de carga probado:** en un Kia EV3 de Europa el coche obedece las órdenes de parar y
+  reanudar la carga. Deja de marcarse como experimental (otros modelos, sin comprobar).
+
 ## 0.4.2-beta (2026-11-15)
 
 - **Control de carga:** a la pausa máxima ya no reanuda si la casa sigue alta (horno, estufa):

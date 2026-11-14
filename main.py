@@ -123,7 +123,7 @@ def run():
 
         if control.activo():
             try:
-                control.tick()
+                control.tick(refrescar=kia_tick)
             except Exception:
                 logging.exception("Error en el control de carga")
 

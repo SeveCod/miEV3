@@ -196,3 +196,73 @@ def test_pausa_maxima_reanuda_si_la_casa_ya_esta_entre_umbrales(env):
 def test_tope_por_defecto_es_8_pausas():
     import importlib, config
     assert importlib.reload(config).LOAD_MAX_PAUSES == 8
+
+
+def _refresco(nueva: dict | None):
+    """Lectura extra simulada: cuenta las llamadas y guarda `nueva` como lectura del coche."""
+    llamadas = []
+
+    def refrescar():
+        llamadas.append(1)
+        if nueva is not None:
+            lectura(**nueva)
+    return refrescar, llamadas
+
+
+PARADO = {"charging": 0, "plugged": 0, "charge_power_kw": 0, "charge_remaining_min": 0}
+
+
+def test_carga_empezada_con_la_casa_alta_se_detecta_con_una_lectura_extra(env):
+    """Coche enchufado después de la última lectura con el termo ya encendido (punto ciego de
+    hasta KIA_INTERVAL_MIN; el limitador salta a los 15–20 min)."""
+    control, casa, ordenes, _ = env
+    lectura(ts="2026-11-14T14:10:00+00:00", **PARADO)        # 13 min antes de t(0)
+    refrescar, llamadas = _refresco({"ts": t(0)})              # ahora sí carga
+    casa["kw"] = 1.7
+    control.tick(t(0), refrescar=refrescar)
+    assert llamadas == [1] and ordenes == ["stop"]
+
+
+def test_lectura_extra_como_mucho_cada_15_min(env):
+    control, casa, ordenes, _ = env
+    lectura(ts="2026-11-14T14:10:00+00:00", **PARADO)
+    refrescar, llamadas = _refresco(None)                      # sigue sin cargar
+    casa["kw"] = 1.7
+    for m in range(0, 31):
+        control.tick(t(m), refrescar=refrescar)
+    assert len(llamadas) == 3 and ordenes == []                # t(0), t(15), t(30)
+
+
+@pytest.mark.parametrize("cambio,minutos", [
+    ({"lat": 40.4}, 13),                                       # fuera de casa
+    ({"soc": 80}, 13),                                         # en su límite
+    ({}, 5),                                                   # lectura reciente (< 10 min)
+])
+def test_sin_lectura_extra_si_no_puede_estar_cargando_en_casa(env, cambio, minutos):
+    control, casa, ordenes, _ = env
+    h, m = divmod(23 - minutos, 60)
+    lectura(ts=f"2026-11-14T{14 + h:02d}:{m:02d}:00+00:00", **{**PARADO, **cambio})
+    refrescar, llamadas = _refresco({"ts": t(0)})
+    casa["kw"] = 1.7
+    control.tick(t(0), refrescar=refrescar)
+    assert llamadas == [] and ordenes == []
+
+
+def test_sin_lectura_extra_con_la_casa_baja(env):
+    control, casa, ordenes, _ = env
+    lectura(ts="2026-11-14T14:10:00+00:00", **PARADO)
+    refrescar, llamadas = _refresco({"ts": t(0)})
+    for m in range(0, 30):
+        casa["kw"] = 0.4
+        control.tick(t(m), refrescar=refrescar)
+    assert llamadas == [] and ordenes == []
+
+
+def test_lectura_extra_como_mucho_12_al_dia(env):
+    control, casa, ordenes, _ = env
+    lectura(ts="2026-11-14T14:10:00+00:00", **PARADO)
+    refrescar, llamadas = _refresco(None)
+    casa["kw"] = 1.7
+    for m in range(0, 15 * 20, 15):                            # 20 ocasiones el mismo día
+        control.tick(t(m), refrescar=refrescar)
+    assert len(llamadas) == 12

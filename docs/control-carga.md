@@ -1,4 +1,4 @@
-# Control de carga por consumo de la casa (opcional, experimental)
+# Control de carga por consumo de la casa (opcional)
 
 Si tu potencia contratada es justa, coche y casa a la vez pueden hacer saltar el limitador (ICP).
 Ejemplo real: coche a 5,7 kW + termo de 1,7 kW con 6 kW contratados → saltó tres veces en una tarde.
@@ -6,7 +6,8 @@ Ejemplo real: coche a 5,7 kW + termo de 1,7 kW con 6 kW contratados → saltó t
 MiEV3 puede **pausar la carga** cuando la casa consume mucho y **reanudarla** cuando baja. Lee
 el consumo de la casa de **Home Assistant** y manda la orden de parar o reanudar a la nube del coche.
 
-> **Experimental.** Parar y reanudar la carga solo se ha probado en un Kia EV3 de Europa.
+> **Probado en un Kia EV3 de Europa:** el coche obedece las órdenes de parar y reanudar la carga.
+> En otros modelos o regiones no se ha comprobado.
 
 ## Qué necesitas
 
