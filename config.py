@@ -85,7 +85,7 @@ LOAD_LOW_KW = _f("LOAD_LOW_KW", "0.6")            # casa < esto durante LOAD_LOW
 LOAD_LOW_MIN = _f("LOAD_LOW_MIN", "10")
 LOAD_PAUSE_MAX_MIN = _f("LOAD_PAUSE_MAX_MIN", "90")  # pausa máxima: luego reanuda aunque la casa siga alta
 LOAD_MAX_PAUSES = _f("LOAD_MAX_PAUSES", "4", int)    # pausas como mucho por carga
-LOAD_REQ_MAX_AGE_MIN = _f("LOAD_REQ_MAX_AGE_MIN", "10")  # una petición más vieja ya no se ejecuta
+LOAD_CHARGER_MAX_KW = _f("LOAD_CHARGER_MAX_KW", "7.4")  # potencia del cargador de casa: más = otro cargador
 
 # --- Panel web ---
 DASH_USER = os.getenv("DASH_USER", "admin")

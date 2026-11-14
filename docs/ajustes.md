@@ -34,6 +34,7 @@ valor por defecto) y queda un aviso en el log. Se admite la coma decimal (`0,15`
 | Pausar si la casa consume | `LOAD_HIGH_KW` | 0,1–30 kW | Control de carga con Home Assistant ([control-carga.md](control-carga.md)) |
 | Reanudar si baja de / Tiempo por debajo para reanudar | `LOAD_LOW_KW`, `LOAD_LOW_MIN` | 0–30 kW / 1–120 min | Control de carga: cuándo se reanuda |
 | Pausa máxima | `LOAD_PAUSE_MAX_MIN` | 10–600 min | Control de carga: tope de cada pausa |
+| Potencia del cargador de casa | `LOAD_CHARGER_MAX_KW` | 1–22 kW | Control de carga: solo actúa en casa y hasta esta potencia (nunca en un cargador público) |
 | Pausas como mucho por carga | `LOAD_MAX_PAUSES` | 1–20 | Control de carga: al llegar, avisa y deja de pausar |
 
 Notas:
@@ -63,7 +64,6 @@ Notas:
 | `API_PORT` | Puerto local del panel (8090) |
 | `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan (16 caracteres o más; vacío = ingesta desactivada) |
 | `HA_URL`, `HA_TOKEN`, `HA_POWER_ENTITY` | Home Assistant para el control de carga (opcional; vacío = apagado) |
-| `LOAD_REQ_MAX_AGE_MIN` | Control de carga: una petición más vieja que esto ya no se ejecuta (10 min) |
 | `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
 | `TZ` | Tu zona horaria: horarios (viajes 23:45, resumen domingo 20:00) y días locales |
 
