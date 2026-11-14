@@ -34,6 +34,9 @@ CAR_COLORS = {
 }
 
 
+LOAD_GROUP = "Control de carga (Home Assistant)"
+
+
 @dataclass(frozen=True)
 class Field:
     key: str
@@ -79,14 +82,14 @@ FIELDS = (
           help="Opcional. Las cargas cerca de este punto se marcan como «Casa»."),
     Field("HOME_LON", "Longitud de casa", "Casa", "coord", -180, 180),
     Field("HOME_RADIUS_M", "Radio de casa", "Casa", "float", 10, 10000, "m"),
-    Field("LOAD_HIGH_KW", "Pausar si la casa consume", "Control de carga (Home Assistant)", "float",
+    Field("LOAD_HIGH_KW", "Pausar si la casa consume", LOAD_GROUP, "float",
           0.1, 30, "kW", help="Solo con Home Assistant configurado en .env. Consumo de la casa sin "
           "el cargador a partir del cual se pausa la carga."),
-    Field("LOAD_LOW_KW", "Reanudar si baja de", "Control de carga (Home Assistant)", "float", 0, 30, "kW"),
-    Field("LOAD_LOW_MIN", "Tiempo por debajo para reanudar", "Control de carga (Home Assistant)", "float", 1, 120, "min"),
-    Field("LOAD_PAUSE_MAX_MIN", "Pausa máxima", "Control de carga (Home Assistant)", "float", 10, 600, "min",
+    Field("LOAD_LOW_KW", "Reanudar si baja de", LOAD_GROUP, "float", 0, 30, "kW"),
+    Field("LOAD_LOW_MIN", "Tiempo por debajo para reanudar", LOAD_GROUP, "float", 1, 120, "min"),
+    Field("LOAD_PAUSE_MAX_MIN", "Pausa máxima", LOAD_GROUP, "float", 10, 600, "min",
           help="Pasado este tiempo la carga se reanuda aunque la casa siga alta."),
-    Field("LOAD_MAX_PAUSES", "Pausas como mucho por carga", "Control de carga (Home Assistant)", "int", 1, 20),
+    Field("LOAD_MAX_PAUSES", "Pausas como mucho por carga", LOAD_GROUP, "int", 1, 20),
 )
 BY_KEY = {f.key: f for f in FIELDS}
 
