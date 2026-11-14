@@ -8,11 +8,11 @@ cd "$(dirname "$0")"
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
 fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-# 1. Python 3.11 o superior
+# 1. Python 3.12 o superior
 PY=${PYTHON:-python3}
-command -v "$PY" >/dev/null || fail "No encuentro python3. Instálalo (3.11 o superior) y repite."
-"$PY" -c 'import sys; sys.exit(sys.version_info < (3, 11))' \
-  || fail "Hace falta Python 3.11 o superior; tienes $("$PY" -V 2>&1)."
+command -v "$PY" >/dev/null || fail "No encuentro python3. Instálalo (3.12 o superior) y repite."
+"$PY" -c 'import sys; sys.exit(sys.version_info < (3, 12))' \
+  || fail "Hace falta Python 3.12 o superior; tienes $("$PY" -V 2>&1)."
 
 # 2. Entorno virtual y dependencias
 say "1/3 · Instalando dependencias en ./venv…"

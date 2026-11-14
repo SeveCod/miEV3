@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.2.1-beta (2026-11-14)
+
+- **Requisito corregido:** hace falta Python **3.12** o superior (la librería del coche no instala en 3.11; lo detectó la CI).
+
 ## 0.2.0-beta (2026-11-14)
 
 Endurecimiento tras la auditoría de la primera beta.

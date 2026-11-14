@@ -9,7 +9,7 @@ detecta las cargas y calcula cuánto te cuestan, guarda tus viajes y te compara 
 gasóleo o de gasolina. Avisa por Telegram y lo enseña todo en un panel web protegido con
 contraseña, con el color de tu coche.
 
-Funciona en cualquier máquina encendida 24/7 con Python 3.11 o superior: un VPS, una Raspberry Pi
+Funciona en cualquier máquina encendida 24/7 con Python 3.12 o superior: un VPS, una Raspberry Pi
 o un mini PC. No hace falta tocar el coche ni instalar nada en él.
 
 > **Probado solo con un Kia EV3 en Europa.** Otros modelos y regiones de la misma librería
@@ -38,8 +38,10 @@ Cada ajuste explicado: [docs/ajustes.md](docs/ajustes.md).
 
 - Una máquina encendida siempre (VPS, Raspberry Pi, mini PC) con **Linux o macOS**. En Windows,
   dentro de WSL.
-- **Python 3.11 o superior** (`python3 --version`). En Debian/Ubuntu: `sudo apt install python3 python3-venv`.
-  Si tienes varias versiones: `PYTHON=python3.12 ./install.sh`.
+- **Python 3.12 o superior** (`python3 --version`); la librería del coche no funciona con versiones
+  anteriores. Debian 12 trae 3.11: usa Debian 13 o Ubuntu 24.04, o instala una versión más nueva.
+  En Debian/Ubuntu: `sudo apt install python3 python3-venv`.
+  Si tienes varias versiones: `PYTHON=python3.13 ./install.sh`.
 - Para que arranque solo y se reinicie si falla, **pm2**, que necesita **Node.js**. Es opcional:
   también puedes arrancarlo a mano o con systemd.
 - La cuenta de la app **Kia Connect** con el coche dado de alta.
@@ -51,7 +53,7 @@ git clone https://github.com/SeveCod/miEV3.git && cd miEV3
 ./install.sh
 ```
 
-El instalador comprueba que tienes Python 3.11 o superior, instala las dependencias en `./venv` y
+El instalador comprueba que tienes Python 3.12 o superior, instala las dependencias en `./venv` y
 te pide el correo, la contraseña y el PIN de Kia Connect. Con eso crea el `.env`, que solo puede
 leer tu usuario, y genera la contraseña del panel si no le das una. Al final prueba la conexión
 con el coche. Se puede repetir sin miedo: si ya hay un `.env`, no lo toca. Si la prueba falla,
