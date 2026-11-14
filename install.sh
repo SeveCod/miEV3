@@ -2,6 +2,7 @@
 # Instalador de MiEV3: entorno de Python, dependencias, .env con tus datos y prueba de conexión.
 # Uso: ./install.sh   (se puede repetir: no pisa un .env que ya exista)
 set -euo pipefail
+umask 077   # lo que se cree aquí (.env, BD), solo legible por tu usuario
 cd "$(dirname "$0")"
 
 say()  { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -38,7 +39,12 @@ from pathlib import Path
 def q(v):  # valor entre comillas dobles, con \ y " escapados (formato de python-dotenv)
     return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-dash = os.environ["DASH_PASS_IN"] or secrets.token_urlsafe(12)
+dash = os.environ["DASH_PASS_IN"]
+if dash and (len(dash) < 8 or not dash.isascii()):
+    print("  ⚠️ La contraseña del panel necesita 8 caracteres o más, sin ñ ni tildes: genero una.")
+    dash = ""
+generated = not dash
+dash = dash or secrets.token_urlsafe(12)
 values = {"KIA_USER": os.environ["KIA_USER_IN"], "KIA_PASSWORD": os.environ["KIA_PASS_IN"],
           "KIA_PIN": os.environ["KIA_PIN_IN"], "DASH_PASS": dash,
           "INGEST_TOKEN": secrets.token_urlsafe(24)}
@@ -49,7 +55,7 @@ for k, v in values.items():
 Path(".env").write_text(text)
 os.chmod(".env", 0o600)
 print("✓ .env creado (solo lo puede leer tu usuario)")
-if not os.environ["DASH_PASS_IN"]:
+if generated:
     print(f"  Contraseña del panel generada: {dash}   (usuario: admin; está en .env como DASH_PASS)")
 PY
 fi

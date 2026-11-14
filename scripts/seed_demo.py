@@ -1,7 +1,7 @@
 """Crea una base de datos de demostración con 60 días de datos inventados (sin ubicación real).
 
 Uso:  DB_PATH=demo.db venv/bin/python scripts/seed_demo.py
-      DB_PATH=demo.db DASH_PASS=demo venv/bin/python api.py   → http://127.0.0.1:8090 (admin / demo)
+      DB_PATH=demo.db DASH_PASS=demo-miev3 venv/bin/python api.py   → http://127.0.0.1:8090 (admin / demo-miev3)
 No toca nada si el fichero ya existe.
 """
 import random, sys

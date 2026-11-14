@@ -1,9 +1,9 @@
 """API + panel web. Protegido con usuario/contraseña (incluye ubicación del coche)."""
-import json, secrets
+import json, logging, math, secrets
 from pathlib import Path
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
-from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi import FastAPI, Depends, HTTPException, Header, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
@@ -16,9 +16,17 @@ app.mount("/img", StaticFiles(directory="static/img"), name="img")
 db.init()
 settings.load()
 
+if not config.secret_ok(config.DASH_PASS, config.DASH_PASS_MIN):
+    logging.error("DASH_PASS vacía, de ejemplo, con menos de %d caracteres o con ñ/tildes: el panel "
+                  "no dejará entrar a nadie. Cámbiala en .env y reinicia.", config.DASH_PASS_MIN)
+
+def _same(a: str, b: str) -> bool:
+    """Comparación en tiempo constante que admite caracteres no ASCII."""
+    return secrets.compare_digest(a.encode(), b.encode())
+
 def auth(cred: HTTPBasicCredentials = Depends(security)):
-    ok = secrets.compare_digest(cred.username, config.DASH_USER) and \
-         config.DASH_PASS and secrets.compare_digest(cred.password, config.DASH_PASS)
+    ok = config.secret_ok(config.DASH_PASS, config.DASH_PASS_MIN) and \
+         _same(cred.username, config.DASH_USER) and _same(cred.password, config.DASH_PASS)
     if not ok:
         raise HTTPException(401, headers={"WWW-Authenticate": "Basic"})
 
@@ -36,13 +44,17 @@ def status():
     v2c = rows("SELECT * FROM v2c_readings ORDER BY ts DESC LIMIT 1")
     since = None
     if last and last[0]["charging"]:
-        since = {"ts": db.get_state("session_start_ts"), "soc": float(db.get_state("session_start_soc", "nan"))}
+        try:
+            soc0 = float(db.get_state("session_start_soc", ""))
+        except ValueError:
+            soc0 = None   # sin % inicial guardado (JSON no admite NaN)
+        since = {"ts": db.get_state("session_start_ts"), "soc": soc0}
     return {"kia": last[0] if last else None, "v2c": v2c[0] if v2c else None,
             "price": config.PRICE_EUR_KWH, "charging_since": since,
             "photo": Path("static/img/car.webp").is_file()}
 
 @app.get("/api/snapshots", dependencies=[Depends(auth)])
-def snapshots(days: int = 7):
+def snapshots(days: int = Query(7, ge=1, le=3650)):
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
     return rows("SELECT ts,soc,charging,range_km,odometer FROM kia_snapshots "
                 "WHERE ts >= ? ORDER BY ts", since)
@@ -52,7 +64,7 @@ def charge_sessions(limit: int = 50):
     return rows("SELECT * FROM charge_sessions ORDER BY end_ts DESC LIMIT ?", limit)
 
 @app.get("/api/trips", dependencies=[Depends(auth)])
-def trips(days: int = 30):
+def trips(days: int = Query(30, ge=1, le=3650)):
     return rows("SELECT * FROM trips WHERE day >= strftime('%Y%m%d', 'now', 'localtime', ?) "
                 "ORDER BY day DESC, start_time DESC", f"-{days} days")
 
@@ -60,7 +72,7 @@ def _day(yyyymmdd):
     return datetime.strptime(yyyymmdd, "%Y%m%d")
 
 def _kwh100(wh, km):
-    return wh / km / 10 if wh is not None and km else None
+    return wh / km / 10 if wh and km else None   # 0 Wh con km recorridos es un dato incompleto
 
 def _grid_eur(kwh_batt):
     """€ de red: la energía consumida más las pérdidas de carga, al precio de casa."""
@@ -75,7 +87,7 @@ def _soc_factor():
     segs, run = 0, []
     snaps = rows("SELECT soc, charging, odometer, total_consumed_wh tc FROM kia_snapshots ORDER BY ts")
     for r in snaps + [None]:
-        if r is not None and r["charging"] != 1 and r["tc"] is not None and r["odometer"] is not None:
+        if r is not None and r["charging"] != 1 and None not in (r["soc"], r["tc"], r["odometer"]):
             run.append(r)
             continue
         if len(run) > 1:
@@ -111,7 +123,7 @@ def efficiency():
     """Consumo según Kia (daily_stats y acumulado de vida) × factor calibrado con SoC."""
     cal = _soc_factor()
     f = cal["soc_factor"]
-    last = rows("SELECT * FROM daily_stats WHERE distance_km > 0 ORDER BY day DESC LIMIT 1")
+    last = rows("SELECT * FROM daily_stats WHERE distance_km > 0 AND total_wh > 0 ORDER BY day DESC LIMIT 1")
     # Ventana de 30 días que termina en el último día con datos
     end = last[0]["day"] if last else datetime.now().strftime("%Y%m%d")
     since = (_day(end) - timedelta(days=30)).strftime("%Y%m%d")
@@ -200,7 +212,7 @@ def report(period: Literal["week", "month", "all"] = "month", key: str = ""):
     """Datos de un informe: totales, filas por día (semana/mes) o por mes (histórico) y viajes."""
     try:
         first, last = _report_range(period, key)
-    except ValueError:
+    except (ValueError, OverflowError):
         raise HTTPException(422, "Periodo no válido: usa 2026-W45 para semanas o 2026-11 para meses")
     cal = _soc_factor()
     lines = _aggregate("month" if period == "all" else "day", first, last, cal["soc_factor"])
@@ -235,7 +247,7 @@ def insights():
     top = max(sorted(per_day), key=lambda d: per_day[d])
     # Día más eficiente con un mínimo de km para que no gane un trayecto corto
     best = rows("SELECT day, total_wh * 1.0 / distance_km / 10 kwh_100, distance_km FROM daily_stats "
-                "WHERE distance_km >= 20 ORDER BY kwh_100, day LIMIT 1")
+                "WHERE distance_km >= 20 AND total_wh > 0 ORDER BY kwh_100, day LIMIT 1")
     if best:
         best = [{**best[0], "kwh_100": best[0]["kwh_100"] * _soc_factor()["soc_factor"]}]
     first, last = min(per_day), max(per_day)
@@ -270,16 +282,41 @@ async def put_settings(req: Request):
         raise HTTPException(422, str(e))
     return settings.describe()
 
+def _ingest_ts(v):
+    """Marca del agente en UTC ISO (como db.utcnow()); sin marca, la hora de llegada."""
+    if v in (None, ""):
+        return db.utcnow()
+    t = datetime.fromisoformat(str(v))
+    if t.tzinfo is None:
+        raise ValueError("ts sin zona horaria")
+    return t.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+def _num(v):
+    if v is None:
+        return None
+    n = float(v)
+    if not math.isfinite(n):
+        raise ValueError("número no finito")
+    return n
+
 @app.post("/ingest/v2c")
 async def ingest_v2c(req: Request, x_token: str = Header(default="")):
-    if not config.INGEST_TOKEN or not secrets.compare_digest(x_token, config.INGEST_TOKEN):
+    if not config.secret_ok(config.INGEST_TOKEN, config.INGEST_TOKEN_MIN) or not _same(x_token, config.INGEST_TOKEN):
         raise HTTPException(403)
-    d = await req.json()
+    # Endpoint sin contraseña del panel: todo lo que llega se valida antes de guardarlo
+    try:
+        d = await req.json()
+        if not isinstance(d, dict):
+            raise ValueError("se esperaba un objeto JSON")
+        row = (_ingest_ts(d.get("ts")), _num(d.get("ChargePower")), _num(d.get("ChargeEnergy")),
+               _num(d.get("HousePower")), _num(d.get("ChargeState")), _num(d.get("Intensity")),
+               json.dumps(d)[:10000])
+    except (ValueError, TypeError) as e:
+        raise HTTPException(422, f"Lectura no válida: {e}")
     with db.conn() as c:
-        c.execute("INSERT OR REPLACE INTO v2c_readings VALUES (?,?,?,?,?,?,?)", (
-            d.get("ts") or db.utcnow(),
-            d.get("ChargePower"), d.get("ChargeEnergy"), d.get("HousePower"),
-            d.get("ChargeState"), d.get("Intensity"), json.dumps(d)))
+        c.execute("""INSERT OR REPLACE INTO v2c_readings
+                     (ts, charge_power_w, charge_energy_kwh, house_power_w, charge_state, intensity, raw)
+                     VALUES (?,?,?,?,?,?,?)""", row)
     return {"ok": True}
 
 if __name__ == "__main__":

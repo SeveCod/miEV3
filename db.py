@@ -1,4 +1,4 @@
-import sqlite3
+import logging, sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import config
@@ -78,10 +78,18 @@ def init():
         for table, col in TS_COLUMNS:
             for (old,) in c.execute(f"SELECT {col} FROM {table} WHERE {col} NOT LIKE '%+%' "
                                     f"AND {col} NOT LIKE '%Z'").fetchall():
-                c.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (_to_utc(old), old))
+                try:
+                    new = _to_utc(old)
+                except (TypeError, ValueError):   # una fila ilegible no debe impedir arrancar
+                    logging.warning("%s.%s ilegible, se deja como está: %r", table, col, old)
+                    continue
+                c.execute(f"UPDATE {table} SET {col}=? WHERE {col}=?", (new, old))
         r = c.execute("SELECT v FROM state WHERE k='session_start_ts'").fetchone()
         if r and _naive(r["v"]):
-            c.execute("UPDATE state SET v=? WHERE k='session_start_ts'", (_to_utc(r["v"]),))
+            try:
+                c.execute("UPDATE state SET v=? WHERE k='session_start_ts'", (_to_utc(r["v"]),))
+            except ValueError:
+                logging.warning("session_start_ts ilegible: %r", r["v"])
 
 def get_state(k, default=None):
     with conn() as c:

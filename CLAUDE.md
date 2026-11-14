@@ -53,7 +53,7 @@ scripts/seed_demo.py  base de datos de demostración
 venv/bin/pip install pytest httpx                      # para los tests
 venv/bin/pytest                                        # sin red: coche simulado y BD temporal
 DB_PATH=demo.db venv/bin/python scripts/seed_demo.py   # datos de demo
-DB_PATH=demo.db DASH_PASS=demo venv/bin/python api.py  # panel con la demo
+DB_PATH=demo.db DASH_PASS=demo-miev3 venv/bin/python api.py  # panel con la demo
 ```
 
 Verificar la UI con la demo, a 390, 768 y 1440 px: sin scroll horizontal, sin textos cortados y

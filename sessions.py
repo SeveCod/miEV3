@@ -27,34 +27,41 @@ def punto(lat, lon) -> str:
     """«🏠 Casa» si cae dentro de HOME_RADIUS_M de HOME_LAT/HOME_LON; si no, las coordenadas."""
     if lat in (None, "") or lon in (None, ""):
         return "📍 ubicación desconocida"
-    lat, lon = float(lat), float(lon)
-    if config.HOME_LAT and config.HOME_LON and _distancia_m(
-            lat, lon, float(config.HOME_LAT), float(config.HOME_LON)) <= config.HOME_RADIUS_M:
-        return "🏠 Casa"
-    return f"📍 {lat:.4f}, {lon:.4f}"
+    try:
+        lat, lon = float(lat), float(lon)
+    except ValueError:
+        return "📍 ubicación desconocida"
+    try:
+        casa = config.HOME_LAT and config.HOME_LON and _distancia_m(
+            lat, lon, float(config.HOME_LAT), float(config.HOME_LON)) <= config.HOME_RADIUS_M
+    except ValueError:   # casa mal configurada: se ignora
+        casa = False
+    return "🏠 Casa" if casa else f"📍 {lat:.4f}, {lon:.4f}"
 
 
 def _hora(ts: str) -> str:
     return datetime.fromisoformat(ts).astimezone(config.LOCAL_TZ).strftime("%H:%M")
 
 
+SESSION_KEYS = ("session_start_ts", "session_start_soc", "session_pause_ts",
+                "session_end_soc", "session_lat", "session_lon")
+
+
 def _cerrar_sesion():
-    """Guarda la sesión (inicio → última pausa) y manda el único aviso."""
+    """Guarda la sesión (inicio → última pausa) y manda el único aviso. La fila y la limpieza
+    del estado van en la misma transacción: si algo falla, no se guarda nada y no se repite."""
     ts0, ts1 = db.get_state("session_start_ts"), db.get_state("session_pause_ts")
     soc0, soc1 = float(db.get_state("session_start_soc")), float(db.get_state("session_end_soc"))
     kwh = max(soc1 - soc0, 0) / 100 * config.BATTERY_KWH / config.CHARGE_EFFICIENCY
     cost = kwh * config.PRICE_EUR_KWH
+    lugar = punto(db.get_state("session_lat"), db.get_state("session_lon"))
+    texto = (f"✅ Carga terminada · {soc0:.0f}% → {soc1:.0f}% · ~{kwh:.1f} kWh · ~{cost:.2f} € "
+             f"({config.PRICE_EUR_KWH:.3f} €/kWh)\n{lugar} · {_hora(ts0)}–{_hora(ts1)}")
     with db.conn() as c:
         c.execute("""INSERT INTO charge_sessions(start_ts,end_ts,soc_start,soc_end,kwh_est,cost_eur,source)
                      VALUES(?,?,?,?,?,?, 'kia_soc')""", (ts0, ts1, soc0, soc1, kwh, cost))
-    lugar = punto(db.get_state("session_lat"), db.get_state("session_lon"))
-    notify(f"✅ Carga terminada · {soc0:.0f}% → {soc1:.0f}% · ~{kwh:.1f} kWh · ~{cost:.2f} € "
-           f"({config.PRICE_EUR_KWH:.3f} €/kWh)\n"
-           f"{lugar} · {_hora(ts0)}–{_hora(ts1)}",
-           "TODAY", event_id=f"miev3:carga:{ts0}")
-    for k in ("session_start_ts", "session_start_soc", "session_pause_ts",
-              "session_end_soc", "session_lat", "session_lon"):
-        db.set_state(k, "")
+        c.executemany("UPDATE state SET v='' WHERE k=?", [(k,) for k in SESSION_KEYS])
+    notify(texto, "TODAY", event_id=f"miev3:carga:{ts0}")
 
 
 def process(snap: dict):

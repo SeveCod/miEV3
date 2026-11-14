@@ -74,7 +74,9 @@ La API escucha solo en `127.0.0.1:8090`. Tienes dos maneras de abrirla:
 - **Desde el móvil:** ponla detrás de nginx o Caddy con HTTPS. Deja `/ingest/v2c` fuera de la
   contraseña si usas el agente del Trydan, porque ese endpoint se protege con su propio token.
 
-Usuario y contraseña: `DASH_USER` y `DASH_PASS` del `.env`. **El panel muestra dónde está aparcado
+Usuario y contraseña: `DASH_USER` y `DASH_PASS` del `.env`. La contraseña necesita al menos 8
+caracteres, sin ñ ni tildes (el acceso HTTP Basic no las admite); si no cumple, el panel no deja
+entrar a nadie y lo explica en el log. **El panel muestra dónde está aparcado
 el coche: nunca lo publiques sin HTTPS.**
 
 ### Primer uso
@@ -102,7 +104,7 @@ el móvil, «Compartir → Imprimir» o «Guardar como PDF», según el navegado
 
 ```bash
 DB_PATH=demo.db venv/bin/python scripts/seed_demo.py           # 60 días inventados
-DB_PATH=demo.db DASH_PASS=demo venv/bin/python api.py          # http://127.0.0.1:8090 (admin / demo)
+DB_PATH=demo.db DASH_PASS=demo-miev3 venv/bin/python api.py          # http://127.0.0.1:8090 (admin / demo-miev3)
 ```
 
 ## Avisos
@@ -140,8 +142,13 @@ en el panel cuando llegan datos.
 
 ## Privacidad
 
-- Todo se queda en tu máquina, en `miev3.db` (SQLite), ubicaciones incluidas. No se envía nada
-  a terceros salvo los avisos al canal que configures.
+- Tus datos se quedan en tu máquina, en `miev3.db` (SQLite), ubicaciones incluidas. El servidor
+  solo habla con la nube del fabricante (para leer el coche) y con el canal de avisos que
+  configures.
+- **Lo que carga tu navegador al abrir el panel:** la tipografía de Google Fonts y la librería de
+  gráficas Chart.js desde cdnjs. Esos servicios ven tu IP, no tus datos. El enlace «Ver en mapa»
+  abre Google Maps con la posición del coche solo si lo pulsas.
+- Los avisos de carga por Telegram incluyen las coordenadas si no has definido tu casa.
 - `.env` y `*.db` están en `.gitignore`.
 - Para la foto del coche en la cabecera, deja tu imagen en `static/img/car.webp`. Sin ella, el
   hueco no aparece.

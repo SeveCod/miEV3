@@ -7,7 +7,7 @@ def client(tmp_path, monkeypatch):
     import config, db, settings
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
     monkeypatch.setattr(config, "DASH_USER", "admin")
-    monkeypatch.setattr(config, "DASH_PASS", "x")
+    monkeypatch.setattr(config, "DASH_PASS", "test-pass")
     # Restaura al final todo lo que los ajustes puedan tocar en config
     for f in settings.FIELDS:
         monkeypatch.setattr(config, f.key, getattr(config, f.key))
@@ -16,7 +16,7 @@ def client(tmp_path, monkeypatch):
         c.execute("INSERT INTO daily_stats VALUES ('20261010',15000,0,0,0,0,0,100)")
     import api
     from fastapi.testclient import TestClient
-    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46eA=="})  # admin:x
+    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})  # admin:test-pass
 
 
 def test_lista_todos_los_ajustes(client):

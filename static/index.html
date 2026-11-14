@@ -256,7 +256,7 @@ body.reporting main{display:none}
 </dialog>
 <script>
 const $ = id => document.getElementById(id);
-const j = u => fetch(u).then(r => r.json());
+const j = u => fetch(u).then(r => { if (!r.ok) throw new Error(`${u} → ${r.status}`); return r.json(); });
 const fmt = (n, d=0) => n == null || isNaN(n) ? "–" : Number(n).toLocaleString("es-ES",{maximumFractionDigits:d,minimumFractionDigits:d});
 const dt = s => s ? new Date(s).toLocaleString("es-ES",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "–";
 const pad = n => String(n).padStart(2,"0");
@@ -427,6 +427,7 @@ function renderHabits(h){
 
 // Barras de km y línea de kWh/100 km por periodo (histórico del panel e informes)
 function kmChart(canvas, labels, rows, bar, {animation = true, maxTicks = 12} = {}){
+  if (typeof Chart === "undefined") return null;   // CDN caído: sin gráfica, las tablas siguen
   return new Chart(canvas, {
     data:{labels, datasets:[
       {type:"bar", label:"km", data:rows.map(r => r.km), backgroundColor:bar, yAxisID:"y", order:2},
@@ -511,9 +512,14 @@ $("setform").onsubmit = async ev => {
   const els = $("setform").elements;
   setDefs.forEach(f => { const v = els[f.key].value; if (String(f.value ?? "") !== v) changed[f.key] = v; });
   if (!Object.keys(changed).length) { $("settings").close(); return; }
-  const r = await fetch("/api/settings", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(changed)});
-  const body = await r.json().catch(() => ({}));
-  if (!r.ok) { $("setmsg").textContent = body.detail || `Error ${r.status}`; return; }
+  try {
+    const r = await fetch("/api/settings", {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(changed)});
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { $("setmsg").textContent = typeof body.detail === "string" ? body.detail : `No se ha guardado (error ${r.status}).`; return; }
+  } catch {
+    $("setmsg").textContent = "No se ha podido conectar con el servidor. Inténtalo de nuevo.";
+    return;
+  }
   location.reload();
 };
 
@@ -598,35 +604,46 @@ const PRINT_CHART_PX = 700;
 addEventListener("beforeprint", () => repChart && repChart.resize(PRINT_CHART_PX, 220));
 addEventListener("afterprint", () => repChart && repChart.resize());
 
+// Cada sección se pinta por su cuenta: si un dato no llega o una sección falla, el resto se ve
+// igual y la cabecera avisa (antes, un solo error dejaba el panel en blanco).
 async function load(){
-  const [defs, st, snaps, ses, trips, eff, ins, months, days] = await Promise.all([j("/api/settings"), j("/api/status"), j("/api/snapshots?days=7"), j("/api/sessions"), j("/api/trips"), j("/api/efficiency"), j("/api/insights"), j("/api/history?group=month"), j("/api/history?group=day")]);
-  Object.assign(hist, {month: months, day: days});
-  renderSettings(defs);
-  applyTheme(setVal("CAR_COLOR"));
-  applyName(setVal("CAR_NAME"));
-  eff.price_eur_kwh = st.price;
-  if (st.photo) { $("hero").innerHTML = `<img src="/img/car.webp" alt="Foto del coche">`; $("hero").hidden = false; }
-  if (st.kia) renderNow(st.kia, st.v2c); else $("updated").textContent = "Aún no hay lecturas: arranca el colector (guía en docs/conectar-api.md).";
-  renderEff(eff);
-  renderSummary(eff, st.kia, ins, months);
-  renderRecords(ins);
-  renderHabits(ins.habits);
-  renderHist("month");
-  document.querySelectorAll("main .tabs button").forEach(b => b.onclick = () => renderHist(b.dataset.g));
-
-  $("sessions").innerHTML = ses.length ? ses.slice(0,15).map(s =>
-    `<tr><td>${dt(s.end_ts)}</td><td>${fmt(s.soc_start)} → ${fmt(s.soc_end)}%</td><td class="n">${fmt(s.kwh_meter ?? s.kwh_est,1)}</td><td class="n">${fmt(s.cost_eur,2)}</td></tr>`).join("")
-    : `<tr><td colspan="4" class="empty">Las cargas aparecerán aquí al terminar la primera.</td></tr>`;
-
-  const live = st.charging_since && st.kia ? {...st.charging_since, soc_now: st.kia.soc} : null;
-  const dayCost = Object.fromEntries(days.map(r => [r.period.replaceAll("-", ""), r]));
-  renderDays(trips, ses, live, dayCost);
-
-  new Chart($("socChart"), {
+  const urls = ["/api/settings", "/api/status", "/api/snapshots?days=7", "/api/sessions", "/api/trips", "/api/efficiency", "/api/insights", "/api/history?group=month", "/api/history?group=day"];
+  const got = await Promise.allSettled(urls.map(j));
+  const [defs, st, snaps, ses, trips, eff, ins, months, days] = got.map(g => g.status === "fulfilled" ? g.value : null);
+  let failed = got.filter(g => g.status === "rejected").length;
+  const part = (...needs) => fn => {
+    if (needs.some(x => x == null)) return;
+    try { fn(); } catch (e) { failed++; console.warn("Sección no pintada:", e); }
+  };
+  if (months) hist.month = months;
+  if (days) hist.day = days;
+  part(defs)(() => { renderSettings(defs); applyTheme(setVal("CAR_COLOR")); applyName(setVal("CAR_NAME")); });
+  part(st)(() => {
+    if (st.photo) { $("hero").innerHTML = `<img src="/img/car.webp" alt="Foto del coche">`; $("hero").hidden = false; }
+    if (st.kia) renderNow(st.kia, st.v2c); else $("updated").textContent = "Aún no hay lecturas: arranca el colector (guía en docs/conectar-api.md).";
+  });
+  part(eff)(() => renderEff(eff));
+  part(eff, st, ins, months)(() => { eff.price_eur_kwh = st.price; renderSummary(eff, st.kia, ins, months); });
+  part(ins)(() => { renderRecords(ins); renderHabits(ins.habits); });
+  part(months)(() => {
+    renderHist("month");
+    document.querySelectorAll("main .tabs button").forEach(b => b.onclick = () => renderHist(b.dataset.g));
+  });
+  part(ses)(() => {
+    $("sessions").innerHTML = ses.length ? ses.slice(0,15).map(s =>
+      `<tr><td>${dt(s.end_ts)}</td><td>${fmt(s.soc_start)} → ${fmt(s.soc_end)}%</td><td class="n">${fmt(s.kwh_meter ?? s.kwh_est,1)}</td><td class="n">${fmt(s.cost_eur,2)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">Las cargas aparecerán aquí al terminar la primera.</td></tr>`;
+  });
+  part(trips, ses, st, days)(() => {
+    const live = st.charging_since && st.kia ? {...st.charging_since, soc_now: st.kia.soc} : null;
+    renderDays(trips, ses, live, Object.fromEntries(days.map(r => [r.period.replaceAll("-", ""), r])));
+  });
+  part(snaps)(() => new Chart($("socChart"), {
     type:"line",
     data:{labels:snaps.map(s => dt(s.ts)), datasets:[{data:snaps.map(s => s.soc), borderColor:C("--charge"), borderWidth:2, pointRadius:snaps.length < 20 ? 3 : 0, tension:.25, fill:false}]},
     options:{maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{y:{min:0,max:100,ticks:{callback:v => v + "%"}}, x:{ticks:{maxTicksLimit:7}}}}
-  });
+  }));
+  if (failed) $("updated").textContent = `${st && st.kia ? $("updated").textContent + " · " : ""}⚠️ Parte de los datos no se ha podido cargar; recarga en un rato.`;
 }
 load();
 </script>

@@ -1,12 +1,31 @@
 """Configuración: valores de .env (o por defecto). Los ajustes de negocio pueden cambiarse
 después desde el panel (⚙ Ajustes): settings.load() los superpone a estos atributos."""
-import os
+import logging, math, os
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
 load_dotenv()
 
-def _f(k, d): return float(os.getenv(k, d))
+def _f(k, d, cast=float):
+    """Número de .env. Acepta coma decimal; si es ilegible o no finito, avisa y usa el defecto
+    (los rangos los comprueba después settings.load())."""
+    raw = os.getenv(k, d)
+    try:
+        n = float(str(raw).strip().replace(",", "."))
+        if not math.isfinite(n):
+            raise ValueError
+        return cast(n)
+    except ValueError:
+        logging.warning("%s=%r no es un número válido en .env; se usa %s", k, raw, d)
+        return cast(float(d))
+
+# Valores de ejemplo publicados en .env.example: nunca valen como contraseña ni como token
+PLACEHOLDER_SECRETS = {"cambia_esto", "pon_un_token_largo_aleatorio"}
+DASH_PASS_MIN, INGEST_TOKEN_MIN = 8, 16
+
+def secret_ok(value: str, min_len: int) -> bool:
+    """Válido si es largo, no es el de ejemplo y es ASCII (HTTP Basic no admite ñ ni tildes)."""
+    return len(value) >= min_len and value.isascii() and value not in PLACEHOLDER_SECRETS
 
 # --- Cuenta del coche (solo .env: son secretos o hacen falta antes del login) ---
 KIA_USER = os.getenv("KIA_USER", "")
@@ -19,7 +38,7 @@ CAR_BRAND = int(os.getenv("CAR_BRAND", "1"))
 
 # --- Ajustes editables desde el panel (ver settings.FIELDS) ---
 CAR_NAME = os.getenv("CAR_NAME", "Mi EV3")
-KIA_INTERVAL_MIN = int(os.getenv("KIA_INTERVAL_MIN", "30"))
+KIA_INTERVAL_MIN = _f("KIA_INTERVAL_MIN", "30", int)
 # Aviso de coche sin datos: tras estos minutos sin leerlo, y repetido cada KIA_DOWN_REPEAT_H
 KIA_DOWN_ALERT_MIN = _f("KIA_DOWN_ALERT_MIN", "120")
 KIA_DOWN_REPEAT_H = _f("KIA_DOWN_REPEAT_H", "12")

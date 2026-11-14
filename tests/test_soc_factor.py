@@ -22,7 +22,7 @@ def _seed(c, tramos):
 def _client(tmp_path, monkeypatch, tramos):
     import config, db
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
-    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "x")
+    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "test-pass")
     monkeypatch.setattr(config, "BATTERY_KWH", 58.3)
     db.init()
     with db.conn() as c:
@@ -34,7 +34,7 @@ def _client(tmp_path, monkeypatch, tramos):
         _seed(c, tramos)
     import api
     from fastapi.testclient import TestClient
-    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46eA=="})
+    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})
 
 
 def test_factor_calibrado_escala_todas_las_cifras(tmp_path, monkeypatch):

@@ -5,9 +5,11 @@ Hay dos sitios para configurar MiEV3:
 - **⚙ Ajustes en el panel:** lo que cambia con el uso (precios, consumo, umbrales…). Se guarda en
   la base de datos, se aplica sin reiniciar y tiene prioridad sobre el `.env`.
 - **Fichero `.env`:** credenciales, contraseñas, tokens, puerto y región. Si cambias algo aquí,
-  ejecuta `pm2 restart all --update-env`. También da el valor inicial de los ajustes del panel.
+  ejecuta `pm2 restart miev3-api miev3-collector --update-env`. También da el valor inicial de los ajustes del panel.
 
 Si escribes un valor fuera de rango, el panel avisa y no guarda **ningún** cambio de ese envío.
+En el `.env`, un número ilegible o fuera de rango no impide arrancar: se lleva al límite (o al
+valor por defecto) y queda un aviso en el log. Se admite la coma decimal (`0,15`).
 
 ## En el panel
 
@@ -52,9 +54,9 @@ Notas:
 | `CAR_BRAND` | 1 Kia, 2 Hyundai, 3 Genesis (solo probado: 1) |
 | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Avisos por Telegram |
 | `NOTIFY_URL`, `NOTIFY_SECRET`, `NOTIFY_DRY_RUN` | Avisos por webhook propio (si no hay Telegram) |
-| `DASH_USER`, `DASH_PASS` | Acceso al panel. Sin `DASH_PASS` no entra nadie |
+| `DASH_USER`, `DASH_PASS` | Acceso al panel. `DASH_PASS` necesita 8 caracteres o más, sin ñ ni tildes; si no, no entra nadie |
 | `API_PORT` | Puerto local del panel (8090) |
-| `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan |
+| `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan (16 caracteres o más; vacío = ingesta desactivada) |
 | `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
 | `TZ` | Zona horaria para agrupar por días. Pon la misma en `ecosystem.config.js` |
 
@@ -65,5 +67,5 @@ bórralo de la base de datos y reinicia:
 
 ```bash
 sqlite3 miev3.db "DELETE FROM settings WHERE k='PRICE_EUR_KWH'"
-pm2 restart all
+pm2 restart miev3-api miev3-collector
 ```

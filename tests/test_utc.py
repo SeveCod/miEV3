@@ -49,7 +49,7 @@ def test_migra_hora_local_a_utc_una_sola_vez(fresh_db):
 def test_historico_agrupa_cargas_por_dia_local(fresh_db, monkeypatch):
     """Una carga que termina a las 23:30 UTC del 31/10 es el 1/11 a las 00:30 en España."""
     import config
-    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "x")
+    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "test-pass")
     db = fresh_db
     db.init()
     with db.conn() as c:
@@ -57,7 +57,7 @@ def test_historico_agrupa_cargas_por_dia_local(fresh_db, monkeypatch):
                   "VALUES ('2026-10-31T20:00:00+00:00','2026-10-31T23:30:00+00:00',10,1.2,'kia_soc')")
     import api
     from fastapi.testclient import TestClient
-    cl = TestClient(api.app, headers={"Authorization": "Basic YWRtaW46eA=="})
+    cl = TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})
     d = {r["period"]: r for r in cl.get("/api/history?group=day").json()}
     assert d["2026-11-01"]["charged_kwh"] == 10
     m = {r["period"] for r in cl.get("/api/history?group=month").json()}
@@ -67,7 +67,7 @@ def test_historico_agrupa_cargas_por_dia_local(fresh_db, monkeypatch):
 def test_snapshots_filtra_por_ventana_utc(fresh_db, monkeypatch):
     from datetime import datetime, timedelta, timezone
     import config
-    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "x")
+    monkeypatch.setattr(config, "DASH_USER", "admin"); monkeypatch.setattr(config, "DASH_PASS", "test-pass")
     db = fresh_db
     db.init()
     now = datetime.now(timezone.utc)
@@ -77,5 +77,5 @@ def test_snapshots_filtra_por_ventana_utc(fresh_db, monkeypatch):
                       [(iso(23), 1), (iso(25), 2)])
     import api
     from fastapi.testclient import TestClient
-    cl = TestClient(api.app, headers={"Authorization": "Basic YWRtaW46eA=="})
+    cl = TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})
     assert [s["soc"] for s in cl.get("/api/snapshots?days=1").json()] == [1]

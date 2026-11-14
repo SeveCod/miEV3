@@ -7,7 +7,7 @@ def client(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "DB_PATH", str(tmp_path / "t.db"))
     monkeypatch.setattr(config, "DASH_USER", "admin")
-    monkeypatch.setattr(config, "DASH_PASS", "x")
+    monkeypatch.setattr(config, "DASH_PASS", "test-pass")
     monkeypatch.setattr(config, "FUEL_TYPE", "diesel")
     monkeypatch.setattr(config, "WLTP_KWH_100", 14.9)
     import db
@@ -29,7 +29,7 @@ def client(tmp_path, monkeypatch):
                   "VALUES ('2026-10-10T21:00:00+00:00','2026-10-11T03:00:00+00:00',47,80,21.4,2.74,'kia_soc')")
     import api
     from fastapi.testclient import TestClient
-    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46eA=="})  # admin:x
+    return TestClient(api.app, headers={"Authorization": "Basic YWRtaW46dGVzdC1wYXNz"})  # admin:test-pass
 
 
 def test_eficiencia(client):

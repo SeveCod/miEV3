@@ -121,9 +121,10 @@ def _check_env():
                 fixed = next(iter(f.options))
             elif f.kind in ("float", "int"):
                 fixed = _parse(f, min(max(float(cur), f.lo), f.hi))
+            elif f.kind == "coord":
+                fixed = ""                                   # sin casa
             else:
-                logging.warning("Valor de .env no válido: %s", e)
-                continue
+                fixed = str(cur).strip()[:int(f.hi)] or "Mi EV3"
             logging.warning("Valor de .env no válido (%s); se usa %r", e, fixed)
             setattr(config, f.key, fixed)
 

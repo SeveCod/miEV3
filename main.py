@@ -87,6 +87,25 @@ def weekly_summary():
            f"≈ {per100:.2f} €/100 km (estimado por SoC)",
            "INFO", event_id=f"miev3:semana:{datetime.now().strftime('%G-%V')}")
 
+def kia_tick():
+    """Lee el coche y procesa la lectura. Solo un fallo al LEER cuenta para el aviso de «coche sin
+    datos»; si falla guardar o procesar (fallo nuestro), se registra sin culpar al coche."""
+    try:
+        v = kia.read()
+        snap = kia.snapshot(v)
+    except Exception as e:
+        logging.error("Error Kia: %s", e)
+        kia_health(False, e)
+        return
+    kia_health(True)
+    try:
+        save_snapshot(snap)
+        save_daily_stats(kia.daily_stats(v))
+        sessions.process(snap)
+        logging.info("Kia SoC %s%% cargando=%s", snap["soc"], snap["charging"])
+    except Exception:
+        logging.exception("Error procesando la lectura del coche")
+
 def run():
     db.init()
     last_kia = 0
@@ -97,17 +116,7 @@ def run():
             logging.error("Error leyendo ajustes: %s", e)
         now = datetime.now()
         if time.time() - last_kia >= config.KIA_INTERVAL_MIN * 60:
-            try:
-                v = kia.read()
-                snap = kia.snapshot(v)
-                save_snapshot(snap)
-                save_daily_stats(kia.daily_stats(v))
-                sessions.process(snap)
-                logging.info("Kia SoC %s%% cargando=%s", snap["soc"], snap["charging"])
-                kia_health(True)
-            except Exception as e:
-                logging.error("Error Kia: %s", e)
-                kia_health(False, e)
+            kia_tick()
             last_kia = time.time()
 
         trips_tick(now)

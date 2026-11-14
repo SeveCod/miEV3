@@ -55,7 +55,7 @@ Qué hacer, en este orden:
    [releases](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api/releases) de la
    librería. Casi siempre otro usuario ya lo ha reportado y hay una versión nueva.
 3. Sube la versión en `requirements.txt` y reinstala:
-   `venv/bin/pip install -r requirements.txt && pm2 restart all`.
+   `venv/bin/pip install -r requirements.txt && pm2 restart miev3-api miev3-collector`.
 4. Algunas cuentas europeas piden un **refresh token** en lugar de la contraseña, o una
    verificación por código (OTP). Cómo sacarlo lo explica el README de la librería: ponlo en
    `KIA_PASSWORD`. MiEV3 no guarda la sesión, así que cada reinicio vuelve a iniciar sesión.
