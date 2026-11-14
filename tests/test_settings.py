@@ -101,11 +101,14 @@ def test_color_y_combustible(client):
     assert set(got["FUEL_TYPE"]["options"]) == {"diesel", "gasolina"}
 
 
-def test_opcion_mala_en_env_no_tumba_el_panel(client, monkeypatch):
+def test_valores_malos_en_env_se_corrigen(client, monkeypatch):
     import config, settings
     monkeypatch.setattr(config, "FUEL_TYPE", "gasoil")
+    monkeypatch.setattr(config, "KIA_INTERVAL_MIN", 5)        # agotaría el cupo de la API
+    monkeypatch.setattr(config, "CHARGE_EFFICIENCY", 0.0)     # dividiría por cero
     settings.load()
     assert config.FUEL_TYPE == "diesel"
+    assert config.KIA_INTERVAL_MIN == 30 and config.CHARGE_EFFICIENCY == 0.5
     assert client.get("/api/efficiency").status_code == 200
 
 

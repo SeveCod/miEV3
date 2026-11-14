@@ -14,7 +14,7 @@
 :root{--paint:#2F8F83;--acc-l:#2B7F75;--acc-d:#3BA597;--charge:var(--acc-l);--on-charge:#fff;--fill:var(--acc-l);
   --mist:color-mix(in srgb,var(--paint) 9%,#F1F4F3);--card:color-mix(in srgb,var(--paint) 3%,#FBFCFC);
   --ink:#1B2326;--euro:#B07612;--warn:#C0563B;--line:#C9D2CF;--soft:#56666A}
-@media (prefers-color-scheme:dark){:root{--charge:var(--acc-d);--on-charge:#0F1A1D;
+@media screen and (prefers-color-scheme:dark){:root{--charge:var(--acc-d);--on-charge:#0F1A1D;
   --mist:color-mix(in srgb,var(--paint) 7%,#0F1A1D);--card:color-mix(in srgb,var(--paint) 6%,#142226);
   --ink:#E4ECE9;--euro:#D9A441;--line:#2A3A3E;--soft:#93A5A8}}
 *{box-sizing:border-box}
@@ -35,9 +35,10 @@ h1{font-size:1.25rem;font-weight:700;margin:0;letter-spacing:.01em}
 .soc{font-size:3.4rem;font-weight:700;letter-spacing:-.02em}
 .range{font-size:1.05rem;text-align:right;color:var(--ink);text-shadow:none}
 .tile,.gauge,.day,.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;min-width:0}
-.tile b,.tile span,.gauge .l,.gauge .t,.stat span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile b,.gauge .l,.stat span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile span,.gauge .t{overflow-wrap:anywhere}
 .now{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,40%),1fr));gap:10px;margin-bottom:8px}
-.tile{padding:0 14px;height:72px;display:flex;gap:12px;align-items:center}
+.tile{padding:8px 14px;min-height:72px;display:flex;gap:12px;align-items:center}
 .tile>div:last-child{min-width:0;flex:1}
 .ico{flex:0 0 28px;height:28px;background:var(--charge);-webkit-mask:var(--m) center/contain no-repeat;mask:var(--m) center/contain no-repeat}
 .tile b,.tile span{display:block}
@@ -95,10 +96,9 @@ tr.chgrow td{color:var(--euro);white-space:normal}
 .heat{max-width:640px;display:grid;grid-template-columns:30px repeat(24,minmax(0,1fr));gap:2px;font-size:.68rem;color:var(--soft)}
 .heat div{aspect-ratio:1;border-radius:2px;background:var(--line)}
 .heat .lbl{align-self:center}
-.btn{font:inherit;font-size:.9rem;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer}
+.btn{font:inherit;font-size:.9rem;padding:6px 14px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--charge)}.btn.primary{background:var(--charge);border-color:var(--charge);color:var(--on-charge)}
 .hright{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap}
-.btn{white-space:nowrap}
 dialog{width:min(640px,calc(100vw - 32px));max-height:calc(100vh - 32px);padding:0;border:1px solid var(--line);border-radius:14px;background:var(--mist);color:var(--ink)}
 dialog::backdrop{background:rgba(15,26,29,.55)}
 dialog form{padding:18px 18px 0}
@@ -145,7 +145,6 @@ body.reporting main{display:none}
 @media print{
   @page{size:A4;margin:12mm}
   body{background:#fff;color:#1B2326;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  :root{--mist:#F4F6F5;--card:#fff;--ink:#1B2326;--line:#C9D2CF;--soft:#56666A;--charge:var(--acc-l);--euro:#B07612}
   .rtools,dialog{display:none!important}
   #report{max-width:none;padding:0}
   .sheet{border:0;border-top:8px solid var(--paint);border-radius:0;padding:12px 0 0}
@@ -158,16 +157,13 @@ body.reporting main{display:none}
 @media (max-width:560px){.field{grid-template-columns:1fr}}
 @media (prefers-reduced-motion:reduce){.fill{transition:none}}
 @media (max-width:560px){
-  .tile{padding:0 10px;height:64px;gap:8px}.ico{flex-basis:22px;height:22px}
+  .tile{padding:8px 10px;min-height:64px;gap:8px}.ico{flex-basis:22px;height:22px}
   .tile b{font-size:1rem}.tile span{font-size:.74rem}
   .big,#summary{grid-template-columns:1fr}
   .stat{display:flex;align-items:baseline;gap:10px;padding:10px 14px}
   .stat b{flex:none;font-size:1.3rem}
   .stat span{min-width:0}
   .gauge .l{font-size:.72rem}.gauge .t{font-size:.68rem}
-  /* en móvil, el texto secundario baja de línea en vez de cortarse con «…» */
-  .tile{height:auto;min-height:64px;padding-block:8px}
-  .tile span,.gauge .t{white-space:normal;overflow-wrap:anywhere}
 }
 </style>
 </head>
@@ -266,7 +262,10 @@ const dt = s => s ? new Date(s).toLocaleString("es-ES",{day:"2-digit",month:"sho
 const pad = n => String(n).padStart(2,"0");
 const hhmm = m => `${pad(Math.floor(Math.min(m,1439)/60))}:${pad(Math.min(m,1439)%60)}`;   // minutos del día → "HH:MM"
 const ymdDate = d => new Date(+d.slice(0,4), +d.slice(4,6)-1, +d.slice(6,8));             // "YYYYMMDD" → Date local
-const dday = d => d ? ymdDate(d).toLocaleDateString("es-ES",{day:"numeric", month:"short"}) : "–";
+const dshort = d => d.toLocaleDateString("es-ES",{day:"numeric", month:"short"});
+const dday = d => d ? dshort(ymdDate(d)) : "–";
+const dlong = d => d.toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
+const tripMin = t => { const h = String(t.start_time).padStart(6,"0"); return +h.slice(0,2)*60 + +h.slice(2,4); };   // "HHMMSS" → minutos del día
 const css = getComputedStyle(document.documentElement);
 const C = v => css.getPropertyValue(v).trim();
 const tile = (icon, value, label, cls="", href="") => {
@@ -363,12 +362,11 @@ function renderDays(trips, sessions, live, dayCost){
     const {trips:ts, charges:cs} = by[d];
     const km = ts.reduce((a,t) => a + t.distance_km, 0), min = ts.reduce((a,t) => a + (t.drive_min||0), 0);
     const vmax = Math.max(0, ...ts.map(t => t.max_speed||0));
-    const date = ymdDate(d).toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
-    const tmin = t => { const h = String(t.start_time).padStart(6,"0"); return +h.slice(0,2)*60 + +h.slice(2,4); };
+    const date = dlong(ymdDate(d));
     const items = [
-      ...ts.map(t => ({at: tmin(t), html:
-        `<tr><td>${hhmm(tmin(t))}</td><td class="n">${fmt(t.distance_km,1)}</td><td class="n">${fmt(t.drive_min)}</td><td class="n">${fmt(t.idle_min)}</td><td class="n">${fmt(t.avg_speed)}</td><td class="n">${fmt(t.max_speed)}</td></tr>`,
-        bar: `<span style="left:${tmin(t)/14.4}%;width:${Math.max((t.drive_min||1)/14.4,.4)}%;background:${speedColor(t.avg_speed||0)}" title="${hhmm(tmin(t))} · ${fmt(t.distance_km,1)} km · ${fmt(t.avg_speed)} km/h"></span>`})),
+      ...ts.map(t => ({at: tripMin(t), html:
+        `<tr><td>${hhmm(tripMin(t))}</td><td class="n">${fmt(t.distance_km,1)}</td><td class="n">${fmt(t.drive_min)}</td><td class="n">${fmt(t.idle_min)}</td><td class="n">${fmt(t.avg_speed)}</td><td class="n">${fmt(t.max_speed)}</td></tr>`,
+        bar: `<span style="left:${tripMin(t)/14.4}%;width:${Math.max((t.drive_min||1)/14.4,.4)}%;background:${speedColor(t.avg_speed||0)}" title="${hhmm(tripMin(t))} · ${fmt(t.distance_km,1)} km · ${fmt(t.avg_speed)} km/h"></span>`})),
       ...cs.map(c => ({at: c.from, html:
         `<tr class="chgrow"><td>${hhmm(c.from)}</td><td colspan="5">⚡ ${c.live ? "Cargando" : "Carga"}${c.first ? "" : " (desde el día anterior)"} · ${fmt(c.soc_start)} → ${fmt(c.soc_end)} %${c.live ? " ahora" : ` · hasta las ${hhmm(c.to)}`}${c.kwh_est != null && !c.live ? ` · ${fmt(c.kwh_meter ?? c.kwh_est,1)} kWh · ${fmt(c.cost_eur,2)} €` : ""}</td></tr>`,
         bar: `<span class="chg" style="left:${c.from/14.4}%;width:${Math.max((c.to-c.from)/14.4,.4)}%" title="Carga ${hhmm(c.from)}–${hhmm(c.to)}"></span>`})),
@@ -427,6 +425,16 @@ function renderHabits(h){
   $("heat").innerHTML = html;
 }
 
+// Barras de km y línea de kWh/100 km por periodo (histórico del panel e informes)
+function kmChart(canvas, labels, rows, bar, {animation = true, maxTicks = 12} = {}){
+  return new Chart(canvas, {
+    data:{labels, datasets:[
+      {type:"bar", label:"km", data:rows.map(r => r.km), backgroundColor:bar, yAxisID:"y", order:2},
+      {type:"line", label:"kWh/100 km", data:rows.map(r => r.kwh_100), borderColor:C("--euro"), backgroundColor:C("--euro"), pointRadius:3, tension:.25, yAxisID:"y1", spanGaps:true, order:1}]},
+    options:{animation, maintainAspectRatio:false, plugins:{legend:{labels:{color:C("--soft")}}},
+      scales:{y:{position:"left", title:{display:true, text:"km"}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, title:{display:true, text:"kWh/100 km"}}, x:{ticks:{maxTicksLimit:maxTicks}}}}
+  });
+}
 let histChart;
 const hist = {};   // /api/history por agrupación, se pide una sola vez
 async function renderHist(group){
@@ -436,13 +444,7 @@ async function renderHist(group){
   $("hist").innerHTML = h.length ? h.slice().reverse().map(r => `<tr><td>${r.period}</td><td class="n">${fmt(r.km,1)}</td><td class="n">${fmt(r.trips)}</td><td class="n">${fmt(r.drive_min/60,1)}</td><td class="n">${fmt(r.kwh_100,1)}</td><td class="n">${fmt(r.l_100,2)}</td><td class="n">${fmt(r.cost_est_eur,2)}</td><td class="n">${fmt(r.charged_kwh,1)}</td><td class="n">${fmt(r.cost_eur,2)}</td></tr>`).join("")
     : `<tr><td colspan="9" class="empty">Sin datos todavía.</td></tr>`;
   if (histChart) histChart.destroy();
-  histChart = new Chart($("histChart"), {
-    data:{labels:h.map(r => r.period), datasets:[
-      {type:"bar", label:"km", data:h.map(r => r.km), backgroundColor:C("--charge"), yAxisID:"y", order:2},
-      {type:"line", label:"kWh/100 km", data:h.map(r => r.kwh_100), borderColor:C("--euro"), backgroundColor:C("--euro"), pointRadius:3, tension:.25, yAxisID:"y1", spanGaps:true, order:1}]},
-    options:{maintainAspectRatio:false, plugins:{legend:{labels:{color:C("--soft")}}},
-      scales:{y:{position:"left", title:{display:true, text:"km"}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, title:{display:true, text:"kWh/100 km"}}, x:{ticks:{maxTicksLimit:12}}}}
-  });
+  histChart = kmChart($("histChart"), h.map(r => r.period), h, C("--charge"));
 }
 
 // Ajustes: formulario generado desde /api/settings (definición, límites y valor actual)
@@ -456,8 +458,9 @@ function applyTheme(key){
   const st = document.documentElement.style;
   st.setProperty("--paint", c.paint); st.setProperty("--acc-l", c.accent); st.setProperty("--acc-d", c.accent_dark);
 }
+const isPalette = f => f.kind === "choice" && Object.values(f.options).every(o => o.paint);
 function choiceInput(f){
-  if (f.key === "CAR_COLOR") {   // paleta con muestras; vista previa al pulsar
+  if (isPalette(f)) {   // opciones con color de pintura → muestras; vista previa al pulsar
     const box = document.createElement("div"); box.className = "colors"; box.setAttribute("role", "radiogroup"); box.setAttribute("aria-label", f.label);
     Object.entries(f.options).forEach(([k, c]) => {
       const lb = document.createElement("label"), r = document.createElement("input"), i = document.createElement("i"), t = document.createElement("span");
@@ -479,7 +482,7 @@ function renderSettings(defs){
     const fs = document.createElement("fieldset"), lg = document.createElement("legend");
     lg.textContent = g; fs.append(lg);
     defs.filter(f => f.group === g).forEach(f => {
-      const row = document.createElement("div"); row.className = "field" + (f.key === "CAR_COLOR" ? " palette" : "");
+      const row = document.createElement("div"); row.className = "field" + (isPalette(f) ? " palette" : "");
       const lb = document.createElement("label"); lb.htmlFor = "set_" + f.key; lb.textContent = f.label;
       const wrap = document.createElement("div"); wrap.className = "in";
       if (f.kind === "choice") wrap.append(choiceInput(f));
@@ -520,7 +523,6 @@ function isoWeekMonday(key){   // "2026-W45" → Date del lunes de esa semana IS
   const [y, w] = key.split("-W").map(Number), jan4 = new Date(y, 0, 4);
   return new Date(y, 0, 4 - (jan4.getDay() + 6) % 7 + (w - 1) * 7);
 }
-const dshort = d => d.toLocaleDateString("es-ES",{day:"numeric", month:"short"});
 function periodLabel(p, key){
   if (p === "week") { const a = isoWeekMonday(key), b = new Date(a); b.setDate(b.getDate() + 6); return `${dshort(a)} – ${dshort(b)} ${b.getFullYear()}`; }
   return new Date(key + "-01T12:00").toLocaleDateString("es-ES",{month:"long", year:"numeric"});
@@ -551,7 +553,7 @@ async function renderReport(){
     return;
   }
   const r = await j(`/api/report?period=${p}&key=${encodeURIComponent(key)}`), t = r.totals, f = r.fuel;
-  $("repcar").textContent = r.car_name;
+  $("repcar").textContent = setVal("CAR_NAME");
   $("reptitle").textContent = p === "all" ? `Informe histórico · desde el ${dday(r.first)} ${r.first.slice(0,4)}`
     : `Informe ${p === "week" ? "semanal" : "mensual"} · ${periodLabel(p, key)}`;
   $("repgen").textContent = "Generado el " + new Date(r.generated).toLocaleString("es-ES",{day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit"});
@@ -567,36 +569,33 @@ async function renderReport(){
     stat(fmt(t.charges), t.charges === 1 ? "carga" : "cargas", `${fmt(t.charged_kwh,1)} kWh · ${fmt(t.cost_eur,2)} €`),
   ].join("");
   const byMonth = p === "all", lab = byMonth ? x => periodLabel("month", x.period)
-    : x => new Date(x.period + "T12:00").toLocaleDateString("es-ES",{weekday:"short", day:"numeric", month:"short"});
+    : x => dlong(new Date(x.period + "T12:00"));
   $("replinestitle").textContent = byMonth ? "Por mes" : "Por día";
   $("replineshead").innerHTML = `<tr><th>${byMonth ? "Mes" : "Día"}</th><th class="n">km</th><th class="n">viajes</th><th class="n">h</th><th class="n">kWh/100</th><th class="n">€ luz</th><th class="n">ahorro €</th><th class="n">kWh cargados</th></tr>`;
   $("replines").innerHTML = r.rows.length ? r.rows.map(x => `<tr><td>${lab(x)}</td><td class="n">${fmt(x.km,1)}</td><td class="n">${fmt(x.trips)}</td><td class="n">${fmt(x.drive_min/60,1)}</td><td class="n">${fmt(x.kwh_100,1)}</td><td class="n">${fmt(x.cost_est_eur,2)}</td><td class="n">${fmt(x.saving_eur,2)}</td><td class="n">${fmt(x.charged_kwh,1)}</td></tr>`).join("")
     : `<tr><td colspan="8" class="empty">Sin datos en este periodo.</td></tr>`;
   $("reptripsbox").hidden = byMonth;
-  const tmin = x => { const h = String(x.start_time).padStart(6,"0"); return +h.slice(0,2)*60 + +h.slice(2,4); };
-  $("reptrips").innerHTML = r.trips.map(x => `<tr><td>${dday(x.day)}</td><td>${hhmm(tmin(x))}</td><td class="n">${fmt(x.distance_km,1)}</td><td class="n">${fmt(x.drive_min)}</td><td class="n">${fmt(x.idle_min)}</td><td class="n">${fmt(x.avg_speed)}</td><td class="n">${fmt(x.max_speed)}</td></tr>`).join("")
+  $("reptrips").innerHTML = r.trips.map(x => `<tr><td>${dday(x.day)}</td><td>${hhmm(tripMin(x))}</td><td class="n">${fmt(x.distance_km,1)}</td><td class="n">${fmt(x.drive_min)}</td><td class="n">${fmt(x.idle_min)}</td><td class="n">${fmt(x.avg_speed)}</td><td class="n">${fmt(x.max_speed)}</td></tr>`).join("")
     || `<tr><td colspan="7" class="empty">Sin viajes.</td></tr>`;
   const odo = r.odometer.start != null ? ` Odómetro: ${fmt(r.odometer.start)} → ${fmt(r.odometer.end)} km.` : "";
   $("repnote").textContent = `Consumo ${r.calibrated ? "calibrado con el % de batería" : "provisional: contador del coche sin calibrar todavía"}. `
-    + `Coste en luz estimado a ${fmt(r.price_eur_kwh,3)} €/kWh, con pérdidas de carga. `
+    + `Coste en luz estimado a ${fmt(setVal("PRICE_EUR_KWH"),3)} €/kWh, con pérdidas de carga. `
     + `Comparación: ${f.label}, ${fmt(f.l_100,1)} L/100 km a ${fmt(f.price_eur_l,2)} €/L, sobre los km con consumo conocido. `
     + `Las cargas cuentan el día en que terminan.${odo}`;
   if (repChart) repChart.destroy();
-  repChart = new Chart($("repChart"), {
-    data:{labels:r.rows.map(lab), datasets:[
-      {type:"bar", label:"km", data:r.rows.map(x => x.km), backgroundColor:C("--acc-l"), yAxisID:"y", order:2},
-      {type:"line", label:"kWh/100 km", data:r.rows.map(x => x.kwh_100), borderColor:C("--euro"), backgroundColor:C("--euro"), pointRadius:3, tension:.25, yAxisID:"y1", spanGaps:true, order:1}]},
-    options:{animation:false, maintainAspectRatio:false, plugins:{legend:{labels:{color:C("--soft")}}},
-      scales:{y:{position:"left", title:{display:true, text:"km"}}, y1:{position:"right", min:0, grid:{drawOnChartArea:false}, title:{display:true, text:"kWh/100 km"}}, x:{ticks:{maxTicksLimit:16}}}}
-  });
+  // Sin animación, para que la gráfica esté completa al imprimir; tono oscuro, legible en papel
+  repChart = kmChart($("repChart"), r.rows.map(lab), r.rows, C("--acc-l"), {animation:false, maxTicks:16});
 }
 $("openrep").onclick = openReport;
 $("repback").onclick = closeReport;
 document.querySelectorAll("#report .tabs button").forEach(b => b.onclick = () => repTab(b.dataset.p));
 $("repkey").onchange = renderReport;
 $("repprint").onclick = () => window.print();
-// La gráfica se redibuja al ancho del papel y vuelve al de pantalla después
-addEventListener("beforeprint", () => repChart && repChart.resize(700, 220));   // ancho útil de un A4
+// Al imprimir, el navegador no avisa a Chart.js del ancho del papel: se redibuja al ancho útil de un
+// A4 (210 mm − 2 × 12 mm de @page ≈ 700 px CSS) y vuelve al de pantalla después. Para otros
+// papeles, el CSS de impresión la encoge si no cabe.
+const PRINT_CHART_PX = 700;
+addEventListener("beforeprint", () => repChart && repChart.resize(PRINT_CHART_PX, 220));
 addEventListener("afterprint", () => repChart && repChart.resize());
 
 async function load(){

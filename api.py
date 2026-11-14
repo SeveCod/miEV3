@@ -98,12 +98,13 @@ def _eff(wh, km):
     k = _kwh100(wh, km)
     if k is None:
         return {"kwh_100": None, "l_100": None, "eur_100": None, "range_full_km": None, "km": km,
-                "saving_eur": None}
+                "cost_eur": None, "fuel_eur": None, "saving_eur": None}
     eur, fuel = _grid_eur(k), _fuel()
-    # Ahorro frente al coche de combustión de referencia en esos mismos km
+    # Coste en luz y lo que costaría el coche de combustión de referencia en esos mismos km
+    cost, fuel_eur = eur * km / 100, fuel["eur_100"] * km / 100
     return {"kwh_100": k, "l_100": k / fuel["kwh_per_l"], "eur_100": eur,
             "range_full_km": config.BATTERY_KWH / k * 100, "km": km,
-            "saving_eur": (fuel["eur_100"] - eur) * km / 100}
+            "cost_eur": cost, "fuel_eur": fuel_eur, "saving_eur": fuel_eur - cost}
 
 @app.get("/api/efficiency", dependencies=[Depends(auth)])
 def efficiency():
@@ -133,38 +134,47 @@ def efficiency():
 
 _GROUPS = {"day": "%Y-%m-%d", "week": "%G-W%V", "month": "%Y-%m"}
 
-def _aggregate(group, first="00000000", last="99999999"):
+def _utc_span(first, last):
+    """Inicio y fin (exclusivo) en UTC ISO de los días locales first..last (date), para filtrar
+    marcas de tiempo; el fin sale del día local siguiente, así el cambio de hora no lo desplaza."""
+    at = lambda d: datetime(d.year, d.month, d.day, tzinfo=config.LOCAL_TZ).astimezone(timezone.utc) \
+        .isoformat(timespec="seconds")
+    return at(first), at(last + timedelta(days=1))
+
+def _aggregate(group, first=date.min, last=date.max, factor=None):
     """km y tiempo de los viajes, consumo de daily_stats y cargas por periodo, entre dos días
-    locales (YYYYMMDD, ambos incluidos). Las cargas cuentan en el día en que terminan."""
+    locales (date, ambos incluidos). Las cargas cuentan en el día en que terminan."""
     fmt = _GROUPS[group]
+    if first > date.min:
+        a, b, (lo, hi) = first.strftime("%Y%m%d"), last.strftime("%Y%m%d"), _utc_span(first, last)
+    else:   # sin límites: ninguna fecha cae fuera de "" … "~"
+        a, b, lo, hi = "", "~", "", "~"
     key = lambda dt: dt.strftime(fmt)
     out = {}
     def slot(p):
         return out.setdefault(p, {"period": p, "km": 0.0, "trips": 0, "drive_min": 0,
                                   "wh": 0.0, "wh_km": 0.0, "charged_kwh": 0.0, "cost_eur": 0.0, "charges": 0})
-    for t in rows("SELECT day, distance_km, drive_min FROM trips WHERE day BETWEEN ? AND ?", first, last):
+    for t in rows("SELECT day, distance_km, drive_min FROM trips WHERE day BETWEEN ? AND ?", a, b):
         s = slot(key(_day(t["day"])))
         s["km"] += t["distance_km"] or 0
         s["drive_min"] += t["drive_min"] or 0
         s["trips"] += 1 if (t["distance_km"] or 0) > 0 else 0
-    for d in rows("SELECT day, total_wh, distance_km FROM daily_stats WHERE day BETWEEN ? AND ?", first, last):
+    for d in rows("SELECT day, total_wh, distance_km FROM daily_stats WHERE day BETWEEN ? AND ?", a, b):
         s = slot(key(_day(d["day"])))
         s["wh"] += d["total_wh"] or 0
         s["wh_km"] += d["distance_km"] or 0
-    for c in rows("SELECT end_ts, COALESCE(kwh_meter, kwh_est) kwh, cost_eur FROM charge_sessions"):
-        end = datetime.fromisoformat(c["end_ts"]).astimezone(config.LOCAL_TZ)
-        if not first <= end.strftime("%Y%m%d") <= last:
-            continue
-        s = slot(key(end))
+    for c in rows("SELECT end_ts, COALESCE(kwh_meter, kwh_est) kwh, cost_eur FROM charge_sessions "
+                  "WHERE end_ts >= ? AND end_ts < ?", lo, hi):
+        s = slot(key(datetime.fromisoformat(c["end_ts"]).astimezone(config.LOCAL_TZ)))
         s["charged_kwh"] += c["kwh"] or 0
         s["cost_eur"] += c["cost_eur"] or 0
         s["charges"] += 1
-    res, f = [], _soc_factor()["soc_factor"]
+    res, f = [], _soc_factor()["soc_factor"] if factor is None else factor
     for p in sorted(out):
         s = out[p]
         wh = s.pop("wh") * f
         e = _eff(wh, wh_km := s.pop("wh_km"))
-        s.update(kwh=wh / 1000, kwh_km=wh_km, cost_est_eur=_grid_eur(wh / 1000) if wh else None,
+        s.update(kwh=wh / 1000, kwh_km=wh_km, cost_est_eur=e["cost_eur"],
                  kwh_100=e["kwh_100"], l_100=e["l_100"], saving_eur=e["saving_eur"])
         res.append(s)
     return res
@@ -192,27 +202,22 @@ def report(period: Literal["week", "month", "all"] = "month", key: str = ""):
         first, last = _report_range(period, key)
     except ValueError:
         raise HTTPException(422, "Periodo no válido: usa 2026-W45 para semanas o 2026-11 para meses")
-    a, b = first.strftime("%Y%m%d"), last.strftime("%Y%m%d")
-    lines = _aggregate("month" if period == "all" else "day", a, b)
+    cal = _soc_factor()
+    lines = _aggregate("month" if period == "all" else "day", first, last, cal["soc_factor"])
     tot = {k: sum(r[k] for r in lines) for k in ("km", "trips", "drive_min", "kwh", "kwh_km",
                                                  "charged_kwh", "cost_eur", "charges")}
-    e, fuel = _eff(tot["kwh"] * 1000 if tot["kwh"] else None, tot["kwh_km"]), _fuel()
-    tot.update(kwh_100=e["kwh_100"], l_100=e["l_100"], eur_100=e["eur_100"],
-               cost_est_eur=_grid_eur(tot["kwh"]) if tot["kwh"] else None,
-               # El ahorro se calcula sobre los km con consumo conocido, igual que el coste estimado
-               fuel_eur=fuel["eur_100"] * tot["kwh_km"] / 100 if tot["kwh"] else None,
+    # Coste, combustión y ahorro sobre los km con consumo conocido (los de daily_stats)
+    e = _eff(tot["kwh"] * 1000 if tot["kwh"] else None, tot["kwh_km"])
+    tot.update(kwh_100=e["kwh_100"], cost_est_eur=e["cost_eur"], fuel_eur=e["fuel_eur"],
                saving_eur=e["saving_eur"])
     # Odómetro: primera y última lectura dentro del periodo (en hora local del coche)
-    lo = datetime(first.year, first.month, first.day, tzinfo=config.LOCAL_TZ).astimezone(timezone.utc)
-    hi = lo + timedelta(days=(last - first).days + 1)
     odo = rows("SELECT MIN(odometer) a, MAX(odometer) b FROM kia_snapshots WHERE odometer IS NOT NULL "
-               "AND ts >= ? AND ts < ?", lo.isoformat(timespec="seconds"), hi.isoformat(timespec="seconds"))[0]
+               "AND ts >= ? AND ts < ?", *_utc_span(first, last))[0]
+    a, b = first.strftime("%Y%m%d"), last.strftime("%Y%m%d")
     trips = [] if period == "all" else rows(
         "SELECT * FROM trips WHERE day BETWEEN ? AND ? AND distance_km > 0 ORDER BY day, start_time", a, b)
-    return {"period": period, "key": key, "first": a, "last": b, "car_name": config.CAR_NAME,
-            "totals": tot, "odometer": {"start": odo["a"], "end": odo["b"]}, "rows": lines,
-            "trips": trips, "fuel": fuel, "price_eur_kwh": config.PRICE_EUR_KWH,
-            "calibrated": _soc_factor()["calibrated"],
+    return {"first": a, "last": b, "totals": tot, "odometer": {"start": odo["a"], "end": odo["b"]},
+            "rows": lines, "trips": trips, "fuel": _fuel(), "calibrated": cal["calibrated"],
             "generated": datetime.now(config.LOCAL_TZ).isoformat(timespec="minutes")}
 
 @app.get("/api/insights", dependencies=[Depends(auth)])

@@ -108,8 +108,30 @@ def _parse(f: Field, raw):
     return str(n) if f.kind == "coord" else n
 
 
+def _check_env():
+    """Los valores de .env pasan la misma validación que los del panel. Uno fuera de rango se
+    lleva al límite (KIA_INTERVAL_MIN=5 → 30) y una opción desconocida a la primera de la lista,
+    con aviso en el log, para que un error de tecleo no tumbe el panel ni agote la API."""
+    for f in FIELDS:
+        cur = getattr(config, f.key)
+        try:
+            setattr(config, f.key, _parse(f, cur))
+        except ValueError as e:
+            if f.kind == "choice":
+                fixed = next(iter(f.options))
+            elif f.kind in ("float", "int"):
+                fixed = _parse(f, min(max(float(cur), f.lo), f.hi))
+            else:
+                logging.warning("Valor de .env no válido: %s", e)
+                continue
+            logging.warning("Valor de .env no válido (%s); se usa %r", e, fixed)
+            setattr(config, f.key, fixed)
+
+
 def load():
-    """Superpone a config los ajustes guardados. Un valor ilegible se ignora con aviso en el log."""
+    """Valida los valores de .env y superpone los ajustes guardados en el panel. Un ajuste
+    guardado ilegible se ignora con aviso en el log."""
+    _check_env()
     with db.conn() as c:
         saved = c.execute("SELECT k, v FROM settings").fetchall()
     for k, v in saved:
@@ -120,12 +142,6 @@ def load():
             setattr(config, k, _parse(f, v))
         except ValueError as e:
             logging.warning("Ajuste guardado no válido, se ignora: %s", e)
-    # Una opción mal escrita en .env (p. ej. FUEL_TYPE=gasoil) no debe tumbar el panel
-    for f in FIELDS:
-        if f.kind == "choice" and getattr(config, f.key) not in f.options:
-            first = next(iter(f.options))
-            logging.warning("%s=%r no es una opción válida; se usa %r", f.key, getattr(config, f.key), first)
-            setattr(config, f.key, first)
 
 
 def save(data: dict):
