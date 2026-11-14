@@ -36,8 +36,9 @@ Notas:
   guardadas** conservan su coste. Las **cifras estimadas** del panel (€/100 km, gasto del mes,
   ahorro frente a diésel) se recalculan con los valores nuevos.
 - **Colores:** `neutro` (verde azulado, sin color de coche), `blanco`, `plata`, `gris`, `negro`,
-  `azul`, `verde`, `pistacho`, `terracota` y `naranja`. Son los de catálogo del EV3 europeo y los
-  tonos son **aproximados**: Kia no publica valores de color. El panel usa una versión más oscura
+  `azul`, `verde`, `pistacho`, `terracota` y `naranja`. Los nombres salen de catálogos del EV3 de
+  varios mercados europeos (*sin verificar* la lista exacta de España, que cambia por año y
+  acabado) y los tonos son **aproximados**: Kia no publica valores de color. El panel usa una versión más oscura
   o más clara de cada uno para que el texto se lea bien en modo claro y oscuro.
 - Para sacar las coordenadas de casa, haz clic derecho sobre tu casa en Google Maps; el primer
   número es la latitud.

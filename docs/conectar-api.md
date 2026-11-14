@@ -12,7 +12,8 @@ ni instalarle nada.
   Si la app no lo ve, MiEV3 tampoco.
 - Usa la cuenta **principal** del coche, la que lo dio de alta. Las cuentas invitadas pueden no
   tener acceso a todos los datos (*sin verificar*).
-- Apunta el **PIN** de la app: lo pide la librería, aunque MiEV3 no manda órdenes al coche.
+- Apunta el **PIN** de la app y ponlo en `KIA_PIN`. La librería lo recibe al conectar, aunque
+  MiEV3 no manda órdenes al coche (*sin verificar* si es obligatorio para solo leer).
 
 ## 2. Rellenar el `.env`
 
@@ -48,8 +49,8 @@ hasta que sale una versión nueva. Pasó dos veces en octubre de 2026:
 
 Qué hacer, en este orden:
 
-1. **No cambies la contraseña** ni pruebes muchas veces seguidas: los intentos fallidos pueden
-   bloquear la cuenta un tiempo.
+1. **No cambies la contraseña** ni pruebes muchas veces seguidas: los intentos fallidos podrían
+   bloquear la cuenta un tiempo (*sin verificar*, pero no merece la pena arriesgarse).
 2. Mira las [issues](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api/issues) y
    [releases](https://github.com/Hyundai-Kia-Connect/hyundai_kia_connect_api/releases) de la
    librería. Casi siempre otro usuario ya lo ha reportado y hay una versión nueva.
@@ -62,8 +63,8 @@ Qué hacer, en este orden:
 ## 5. Lo que hay que saber de la API
 
 - **Los datos no son en directo.** MiEV3 lee el último estado que el coche subió a la nube.
-  El coche lo sube al apagarse, al cargar y en algunos eventos, así que puede tener minutos u
-  horas. El panel enseña siempre la hora del dato («Dato del coche: …»).
+  Por lo observado en un EV3, el coche lo sube al apagarse y durante la carga, así que el dato
+  puede tener minutos u horas. El panel enseña siempre la hora del dato («Dato del coche: …»).
 - **Nunca se fuerza al coche a actualizar.** Despertarlo gasta la batería de 12 V y el cupo
   diario de llamadas de la cuenta (el límite exacto no está publicado). Por eso el mínimo es una
   lectura cada 30 minutos, y el ajuste no deja bajarlo.
