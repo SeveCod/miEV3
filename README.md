@@ -37,7 +37,7 @@ Cada ajuste explicado: [docs/ajustes.md](docs/ajustes.md).
 ## Instalación
 
 ```bash
-git clone <este-repo> miev3 && cd miev3
+git clone https://github.com/SeveCod/miEV3.git && cd miEV3
 ./install.sh
 ```
 
