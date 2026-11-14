@@ -5,7 +5,7 @@ import os, time, logging, requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(interpolate=False)
 TRYDAN_IP = os.getenv("TRYDAN_IP", "192.168.1.50")
 VPS_URL = os.getenv("VPS_INGEST_URL", "https://tu-vps/ingest/v2c")
 TOKEN = os.getenv("INGEST_TOKEN", "")

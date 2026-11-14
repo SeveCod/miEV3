@@ -116,7 +116,10 @@ def init():
         c.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         c.execute("COMMIT")
     except BaseException:
-        c.execute("ROLLBACK")
+        try:
+            c.execute("ROLLBACK")
+        except sqlite3.Error:
+            pass   # que no tape el error original
         raise
     finally:
         c.close()

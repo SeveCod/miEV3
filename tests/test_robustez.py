@@ -191,7 +191,7 @@ def test_fallo_al_procesar_no_cuenta_como_coche_caido(client, monkeypatch):
 def test_cabeceras_de_seguridad_y_sin_docs(client):
     r = client.get("/")
     csp = r.headers["Content-Security-Policy"]
-    assert "frame-ancestors 'none'" in csp and "script-src 'self' https://cdnjs.cloudflare.com;" in csp
+    assert "frame-ancestors 'none'" in csp and "script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js;" in csp
     assert r.headers["X-Frame-Options"] == "DENY" and r.headers["X-Content-Type-Options"] == "nosniff"
     for u in ["/docs", "/redoc", "/openapi.json"]:
         assert client.get(u).status_code == 404, u
@@ -243,3 +243,36 @@ def test_resumen_semanal_solo_se_marca_si_llega(client, monkeypatch):
     assert main.weekly_summary() is False
     monkeypatch.setattr(main, "notify", lambda *a, **k: True)
     assert main.weekly_summary() is True
+
+
+# --- Gate de release 0.3.1
+
+def test_env_sin_interpolacion(tmp_path):
+    """Una contraseña con ${...} o $ se lee tal cual (antes python-dotenv la expandía)."""
+    import subprocess, sys
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    (tmp_path / ".env").write_text('DASH_PASS="ab${HOME}cd$x"\nCAR_REGION=uno\n')
+    out = subprocess.run([sys.executable, "-c", f"import sys; sys.path.insert(0, {str(root)!r}); "
+                          "import config; print(config.DASH_PASS, config.CAR_REGION)"],
+                         cwd=tmp_path, capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"})
+    assert out.stdout.strip() == "ab${HOME}cd$x 1", out.stderr
+
+
+def test_ingesta_grande_o_desbordada(client):
+    hdr = {"X-Token": TOKEN}
+    assert client.post("/ingest/v2c", headers=hdr, content=b"{" + b" " * 70_000 + b"}").status_code == 413
+    assert client.post("/ingest/v2c", headers=hdr, content=json.dumps({"ChargePower": 10 ** 400})).status_code == 422
+
+
+def test_limite_de_cargas_acotado(client):
+    assert client.get("/api/sessions?limit=999999999").status_code == 422
+
+
+def test_hay_canal_de_avisos(monkeypatch):
+    import config, notify
+    for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "NOTIFY_URL"):
+        monkeypatch.setattr(config, k, "")
+    assert not notify.has_channel()
+    monkeypatch.setattr(config, "NOTIFY_URL", "https://example.invalid/hook")
+    assert notify.has_channel()

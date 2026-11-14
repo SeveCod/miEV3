@@ -3,7 +3,7 @@ import logging, time
 from datetime import datetime, timedelta
 import config, db, sessions, settings, stats
 from collectors import kia
-from notify import notify
+from notify import has_channel, notify
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -115,15 +115,22 @@ def run():
             logging.error("Error leyendo ajustes: %s", e)
         now = datetime.now()
         if time.time() - last_kia >= config.KIA_INTERVAL_MIN * 60:
-            kia_tick()
             last_kia = time.time()
+            try:
+                kia_tick()
+            except Exception:
+                logging.exception("Error en la lectura del coche")
 
         trips_tick(now)
 
         week = now.strftime("%G-%V")
-        if now.weekday() == 6 and now.hour == 20 and db.get_state("summary_week") != week:
-            if weekly_summary():   # si el aviso no llega, se reintenta en la vuelta siguiente
-                db.set_state("summary_week", week)
+        try:
+            if now.weekday() == 6 and now.hour == 20 and db.get_state("summary_week") != week:
+                # Si el aviso no llega se reintenta en la vuelta siguiente; sin canal, no hay a quién
+                if weekly_summary() or not has_channel():
+                    db.set_state("summary_week", week)
+        except Exception:
+            logging.exception("Error en el resumen semanal")
 
         time.sleep(60)
 

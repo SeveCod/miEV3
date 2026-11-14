@@ -63,7 +63,7 @@ sigue la [guía de conexión](docs/conectar-api.md).
 
 ```bash
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
-cp .env.example .env && nano .env        # cuenta del coche, contraseña del panel, Telegram
+cp .env.example .env && chmod 600 .env && nano .env   # cuenta del coche, contraseña del panel, Telegram
 venv/bin/python -c "from collectors import kia; print(kia.snapshot())"   # ¿lee el coche?
 ```
 </details>
@@ -99,7 +99,9 @@ La API escucha solo en `127.0.0.1:8090`. Tienes dos maneras de abrirla:
 Usuario y contraseña: `DASH_USER` y `DASH_PASS` del `.env`. La contraseña necesita al menos 8
 caracteres, sin ñ ni tildes (el acceso HTTP Basic no las admite); si no cumple, el panel no deja
 entrar a nadie y lo explica en el log. **El panel muestra dónde está aparcado
-el coche: nunca lo publiques sin HTTPS.**
+el coche: nunca lo publiques sin HTTPS.** MiEV3 no limita los intentos de contraseña: si lo
+abres a internet, usa una contraseña larga (la que genera `install.sh` lo es) y, si quieres más,
+limita los intentos en el proxy o con fail2ban.
 
 ### Primer uso
 
@@ -194,7 +196,7 @@ Todo lo tuyo está en dos ficheros: `.env` (cuenta y contraseñas) y `miev3.db` 
 viajes y ajustes). Para copiar la base de datos con la app en marcha:
 
 ```bash
-venv/bin/python -c "import sqlite3; sqlite3.connect('miev3.db').backup(sqlite3.connect('copia-miev3.db'))"
+(umask 077 && venv/bin/python -c "import sqlite3; sqlite3.connect('miev3.db').backup(sqlite3.connect('copia-miev3.db'))")
 ```
 
 Guarda la copia y el `.env` fuera de la máquina. Para restaurar: para MiEV3, pon la copia como
@@ -205,7 +207,8 @@ Guarda la copia y el `.env` fuera de la máquina. Para restaurar: para MiEV3, po
 Es una beta: si algo falla o echas algo en falta, abre una
 [incidencia en GitHub](https://github.com/SeveCod/miEV3/issues). Ayuda mucho incluir la versión
 (`cat VERSION`), el modelo y país del coche y las últimas líneas de `pm2 logs miev3-collector`.
-**Antes de pegar logs, borra tu correo, tu contraseña y tus coordenadas.**
+**Antes de pegar logs, borra tu correo, tu contraseña, el VIN y tus coordenadas.** Los fallos de
+seguridad no van en una incidencia pública: mira [SECURITY.md](SECURITY.md).
 
 ## Desarrollo
 

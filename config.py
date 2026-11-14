@@ -4,7 +4,7 @@ import logging, math, os, time
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(interpolate=False)   # una contraseña con ${...} se lee tal cual
 # TZ del .env manda en todo el proceso (horarios del colector y días locales); así no hay que
 # repetirla en ecosystem.config.js
 if os.getenv("TZ") and hasattr(time, "tzset"):
@@ -37,8 +37,8 @@ KIA_PASSWORD = os.getenv("KIA_PASSWORD", "")
 KIA_PIN = os.getenv("KIA_PIN", "")
 # hyundai_kia_connect_api: región 1 = Europa, 2 = Canadá, 3 = EE. UU.…; marca 1 = Kia, 2 = Hyundai, 3 = Genesis.
 # Solo se ha probado con Kia en Europa (región 1, marca 1).
-CAR_REGION = int(os.getenv("CAR_REGION", "1"))
-CAR_BRAND = int(os.getenv("CAR_BRAND", "1"))
+CAR_REGION = _f("CAR_REGION", "1", int)
+CAR_BRAND = _f("CAR_BRAND", "1", int)
 # Cuenta con varios coches: VIN del que se lee (vacío = el primero, con aviso si hay más)
 CAR_VIN = os.getenv("CAR_VIN", "").strip()
 
@@ -78,7 +78,7 @@ NOTIFY_DRY_RUN = os.getenv("NOTIFY_DRY_RUN", "") == "1"
 # --- Panel web ---
 DASH_USER = os.getenv("DASH_USER", "admin")
 DASH_PASS = os.getenv("DASH_PASS", "")
-API_PORT = int(os.getenv("API_PORT", "8090"))
+API_PORT = _f("API_PORT", "8090", int)
 INGEST_TOKEN = os.getenv("INGEST_TOKEN", "")
 
 DB_PATH = os.getenv("DB_PATH", "miev3.db")

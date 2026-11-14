@@ -1,5 +1,21 @@
 # Cambios
 
+## 0.3.1-beta (2026-11-14)
+
+Condiciones de la revisión final antes de publicar.
+
+- **Contraseñas con `$`:** el `.env` se lee sin interpolar `${...}`; antes, una contraseña con
+  `$` podía cambiar sin avisar.
+- **CSP:** solo admite el fichero exacto de Chart.js. La ingesta del Trydan rechaza envíos de
+  más de 64 KB y números desbordados. Las cargas por página tienen un límite.
+- **Colector:** un fallo en una vuelta (lectura o resumen semanal) ya no lo detiene. Sin canal de
+  avisos, el resumen no se reintenta cada minuto.
+- **Configuración:** `CAR_REGION`, `CAR_BRAND` y `API_PORT` ilegibles en `.env` ya no impiden
+  arrancar.
+- **CI:** acciones fijadas por SHA.
+- **Documentación:** `SECURITY.md` con aviso privado de vulnerabilidades. El README explica los
+  permisos de la instalación manual y de la copia de la BD, y el límite de intentos.
+
 ## 0.3.0-beta (2026-11-14)
 
 - **Resumen semanal con las cifras del panel:** km, viajes, cargas, kWh/100 km, coste en luz y

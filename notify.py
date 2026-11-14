@@ -4,6 +4,11 @@ Best-effort: un aviso caído se registra y nunca tumba al colector."""
 import html, logging, requests, config
 
 
+def has_channel() -> bool:
+    """Hay Telegram o webhook configurado (sin ninguno, los avisos solo van al log)."""
+    return bool((config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID) or config.NOTIFY_URL)
+
+
 def notify(text: str, urgency: str = "TODAY", event_id: str | None = None) -> bool:
     try:
         if config.TELEGRAM_BOT_TOKEN and config.TELEGRAM_CHAT_ID:

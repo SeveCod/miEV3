@@ -16,7 +16,8 @@ VERSION = (STATIC.parent / "VERSION").read_text().strip()
 
 # CSP sin 'unsafe-inline' para scripts (el JS va en /app.js). Los style="" del panel necesitan
 # 'unsafe-inline' en estilos, que no ejecuta código. frame-ancestors evita incrustar el panel.
-CSP = ("default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; "
+CHART_JS = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"
+CSP = (f"default-src 'self'; script-src 'self' {CHART_JS}; "
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 
@@ -83,7 +84,7 @@ def snapshots(days: int = Query(7, ge=1, le=3650)):
                 "WHERE ts >= ? ORDER BY ts", since)
 
 @app.get("/api/sessions", dependencies=[Depends(auth)])
-def charge_sessions(limit: int = 50):
+def charge_sessions(limit: int = Query(50, ge=1, le=1000)):
     return stats.rows("SELECT * FROM charge_sessions ORDER BY end_ts DESC LIMIT ?", limit)
 
 @app.get("/api/trips", dependencies=[Depends(auth)])
@@ -221,14 +222,17 @@ async def ingest_v2c(req: Request, x_token: str = Header(default="")):
     if not config.secret_ok(config.INGEST_TOKEN, config.INGEST_TOKEN_MIN) or not _same(x_token, config.INGEST_TOKEN):
         raise HTTPException(403)
     # Endpoint sin contraseña del panel: todo lo que llega se valida antes de guardarlo
+    body = await req.body()
+    if len(body) > 64_000:
+        raise HTTPException(413, "Lectura demasiado grande")
     try:
-        d = await req.json()
+        d = json.loads(body)
         if not isinstance(d, dict):
             raise ValueError("se esperaba un objeto JSON")
         row = (_ingest_ts(d.get("ts")), _num(d.get("ChargePower")), _num(d.get("ChargeEnergy")),
                _num(d.get("HousePower")), _num(d.get("ChargeState")), _num(d.get("Intensity")),
                json.dumps(d)[:10000])
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError, OverflowError) as e:
         raise HTTPException(422, f"Lectura no válida: {e}")
     with db.conn() as c:
         c.execute("""INSERT OR REPLACE INTO v2c_readings
