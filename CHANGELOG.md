@@ -1,5 +1,12 @@
 # Cambios
 
+## 0.4.5-beta (2026-11-15)
+
+- **Control de carga:** pausar y reanudar por el consumo de la casa ya no manda aviso. Con
+  urgencia baja llegaba en el resumen del día, horas después, y no servía de nada. Lo cuenta el
+  aviso de «Carga terminada». Siguen avisando el tope de pausas, las órdenes que fallan y la
+  reanudación por pausa máxima.
+
 ## 0.4.4-beta (2026-11-15)
 
 - **Cargas:** si el control reanuda y el coche ya no vuelve a cargar (desenchufado), la carga se
