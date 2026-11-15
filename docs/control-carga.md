@@ -52,7 +52,7 @@ Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*,
 - Solo reanuda una carga que pausó él. A la pausa máxima reanuda si la casa ya bajó o Home Assistant
   no responde; si la casa sigue alta, alarga la pausa y avisa una vez. Una pausa del control no parte la carga en dos.
 - Si una orden falla tres veces seguidas, avisa y no insiste en esa carga.
-- Pausar y reanudar por la casa no manda aviso (llegaría tarde, en el resumen del día). El aviso de
+- Pausar y reanudar por la casa no manda aviso (es ruido). El aviso de
   «Carga terminada» dice cuántas pausas hubo y si la batería se quedó por debajo del límite de
   carga del coche. Sí avisan: el tope de pausas, una orden que falla y la reanudación a la pausa máxima.
 

@@ -67,7 +67,7 @@ def test_pausa_y_reanuda_una_vez(env):
     assert ordenes == ["stop"]                         # solo una vez aunque siga alta
     correr(control, casa, 5, 16, kw=0.3)              # 10 min por debajo de 0,6
     assert ordenes == ["stop", "start"]
-    assert avisos == []                                # sin avisos: lo resume «Carga terminada»
+    assert avisos == []
 
 
 @pytest.mark.parametrize("cambio", [
