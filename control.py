@@ -23,7 +23,8 @@ Reglas:
 - Como mucho LOAD_MAX_PAUSES pausas por carga; al llegar al tope avisa una vez y deja cargar.
 - Una orden que falla se reintenta en los minutos siguientes; a los MAX_TRIES fallos avisa y
   no insiste en esa carga.
-- Al terminar la carga, «Carga terminada» dice cuántas pausas hubo y si se quedó por debajo del límite.
+- Pausar y reanudar por la casa no avisa (llegaría tarde, en el resumen del día): lo cuenta
+  «Carga terminada», con cuántas pausas hubo y si se quedó por debajo del límite.
 Parar y reanudar: probado en un Kia EV3 (UE), el coche obedece (2026-11-15). Otros modelos: TODO verificar.
 """
 import logging
@@ -145,8 +146,7 @@ def _pausar(now: str, ciclo: str) -> None:
     if r == "ok":
         db.set_state(PAUSED, now)
         db.set_state(COUNT, n + 1)
-        notify(f"⏸️ {config.CAR_NAME}: carga en pausa, la casa consume mucho. Se reanuda cuando baje.",
-               "INFO", event_id=f"miev3:load-pause:{now}")
+        logging.info("Carga en pausa: la casa consume mucho")   # sin aviso: lo resume «Carga terminada»
     elif r == "fallo":
         db.set_state(GIVEN_UP, ciclo)
 
@@ -164,10 +164,11 @@ def _reanudar(now: str, por_seguridad: bool) -> None:
     if db.get_state("session_pause_ts"):
         db.set_state("session_pause_ts", now)
     if r == "ok":
-        motivo = (f"{config.LOAD_PAUSE_MAX_MIN:.0f} min de pausa como máximo" if por_seguridad
-                  else "la casa ya consume poco")
-        notify(f"▶️ {config.CAR_NAME}: carga reanudada tras {dur:.0f} min de pausa ({motivo}).",
-               "TODAY" if por_seguridad else "INFO", event_id=f"miev3:load-resume:{desde}")
+        logging.info("Carga reanudada tras %.0f min de pausa", dur)
+        if por_seguridad:   # solo avisa si reanuda por tiempo máximo, no por la casa ya baja
+            notify(f"▶️ {config.CAR_NAME}: carga reanudada tras {dur:.0f} min de pausa "
+                   f"({config.LOAD_PAUSE_MAX_MIN:.0f} min de pausa como máximo).",
+                   "TODAY", event_id=f"miev3:load-resume:{desde}")
 
 
 def en_pausa() -> bool:
