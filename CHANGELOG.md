@@ -2,10 +2,10 @@
 
 ## 0.4.5-beta (2026-11-15)
 
-- **Control de carga:** pausar y reanudar por el consumo de la casa ya no manda aviso. Con
-  urgencia baja llegaba en el resumen del día, horas después, y no servía de nada. Lo cuenta el
-  aviso de «Carga terminada». Siguen avisando el tope de pausas, las órdenes que fallan y la
-  reanudación por pausa máxima.
+- **Control de carga:** pausar y reanudar por el consumo de la casa ya no manda aviso: era ruido
+  (por webhook, además, llegaba horas después en el resumen del día). Lo cuenta el aviso de
+  «Carga terminada». Siguen avisando el tope de pausas, las órdenes que fallan y la
+  reanudación por pausa máxima, ahora con texto más corto.
 
 ## 0.4.4-beta (2026-11-15)
 
