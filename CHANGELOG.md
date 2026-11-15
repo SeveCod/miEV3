@@ -1,5 +1,14 @@
 # Cambios
 
+## 0.4.4-beta (2026-11-15)
+
+- **Cargas:** si el control reanuda y el coche ya no vuelve a cargar (desenchufado), la carga se
+  cierra al pasar el hueco; antes podía quedar abierta y unirse a la siguiente.
+- **Control de carga:** tras reanudar ya no da por hecho que el coche carga; si la casa vuelve a
+  subir, lo confirma con la lectura extra (con su cupo) antes de pausar.
+- La lectura extra también cuenta como lectura programada (no se repite a los pocos minutos) y
+  el cupo se mira antes de preguntar a Home Assistant. Código más simple.
+
 ## 0.4.3-beta (2026-11-15)
 
 - **Control de carga probado:** en un Kia EV3 de Europa el coche obedece las órdenes de parar y
