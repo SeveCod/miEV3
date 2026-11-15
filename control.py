@@ -38,7 +38,7 @@ STALE_MIN = 10            # lectura guardada más vieja que esto: puede haber em
 REFRESH_EVERY_MIN = 15    # como mucho una lectura extra del coche cada tanto…
 REFRESH_MAX_DAY = 12      # …y como mucho estas al día (día local)
 REFRESHED, REFRESH_DAY = "load_refreshed_at", "load_refresh_day"
-PAUSED, RESUMED, LOW_SINCE, TRIES = "load_paused_at", "load_resumed_at", "load_low_since", "load_tries"
+PAUSED, LOW_SINCE, TRIES = "load_paused_at", "load_low_since", "load_tries"
 EXTENDED = "load_extended"   # pausa (su inicio) ya alargada y avisada
 # Carga en curso (session_start_ts): pausas hechas, minutos en pausa y si ya no se insiste
 CYCLE, COUNT, PAUSED_MIN, GIVEN_UP = "load_cycle", "load_count", "load_paused_min", "load_given_up"
@@ -68,36 +68,41 @@ def _ultima_lectura() -> dict:
     return dict(row) if row else {}
 
 
-def _carga_vigilable(s: dict, ciclo: str) -> bool:
-    """La última lectura dice que el coche carga en el cargador de casa por debajo de su límite (o
-    lo acabamos de reanudar y aún no hay lectura nueva), y en esta carga no hemos llegado al tope.
+def _en_casa_bajo_limite(s: dict) -> bool:
+    """Lectura del coche en casa y por debajo de su límite de carga."""
+    if not s or sessions.en_casa(s.get("lat"), s.get("lon")) is not True:
+        return False
+    return not (s.get("soc") is not None and s.get("charge_limit_ac") and s["soc"] >= s["charge_limit_ac"])
+
+
+def _abandonada(ciclo: str) -> bool:
+    """En esta carga ya no se insiste (tope de pausas u orden fallida)."""
+    return bool(ciclo) and db.get_state(GIVEN_UP) == ciclo
+
+
+def _carga_vigilable(s: dict) -> bool:
+    """La última lectura dice que el coche carga en el cargador de casa por debajo de su límite.
     La API no da un ID del cargador: «el de casa» = dentro del radio de casa y sin pasar de
     LOAD_CHARGER_MAX_KW (un cargador público AC trifásico o DC da más potencia)."""
-    if not s or db.get_state(GIVEN_UP) == ciclo:
-        return False
-    if sessions.en_casa(s.get("lat"), s.get("lon")) is not True or s.get("plugged") == 0:
+    if not _en_casa_bajo_limite(s) or s.get("plugged") == 0:
         return False
     if (s.get("charge_power_kw") or 0) > config.LOAD_CHARGER_MAX_KW:
         return False
-    if s.get("soc") is not None and s.get("charge_limit_ac") and s["soc"] >= s["charge_limit_ac"]:
-        return False
     if s.get("charging") is None:   # CCS2: la librería puede no saberlo; vale la potencia
-        cargando = (s.get("charge_power_kw") or 0) > 0 or (s.get("charge_remaining_min") or 0) > 0
-    else:
-        cargando = bool(s["charging"])
-    return cargando or (db.get_state(RESUMED) or "") > s["ts"]
+        return (s.get("charge_power_kw") or 0) > 0 or (s.get("charge_remaining_min") or 0) > 0
+    return bool(s["charging"])
 
 
-def _puede_empezar(s: dict, ciclo: str, now: str) -> bool:
-    """Coche en casa por debajo de su límite con una lectura vieja: puede estar cargando ya
-    aunque la lectura diga que no (enchufado después de leerla)."""
-    if not s or db.get_state(GIVEN_UP) == ciclo:
-        return False
-    if sessions.en_casa(s.get("lat"), s.get("lon")) is not True:
-        return False
-    if s.get("soc") is not None and s.get("charge_limit_ac") and s["soc"] >= s["charge_limit_ac"]:
-        return False
-    return sessions._minutos(s["ts"], now) > STALE_MIN
+def _cupo_de_lectura(now: str) -> str:
+    """Valor de REFRESH_DAY tras gastar una lectura extra, o '' si no queda cupo (como mucho una
+    cada REFRESH_EVERY_MIN y REFRESH_MAX_DAY por día local). Solo lee el estado."""
+    ultima = db.get_state(REFRESHED) or ""
+    if ultima and sessions._minutos(ultima, now) < REFRESH_EVERY_MIN:
+        return ""
+    dia = datetime.fromisoformat(now).astimezone(config.LOCAL_TZ).date().isoformat()
+    d, _, n = (db.get_state(REFRESH_DAY) or "").partition("#")
+    n = int(n) if d == dia else 0
+    return f"{dia}#{n + 1}" if n < REFRESH_MAX_DAY else ""
 
 
 def _contador(ciclo: str) -> int:
@@ -118,9 +123,10 @@ def _orden(start: bool) -> str:
         n = int(db.get_state(TRIES) or 0) + 1
         logging.error("Control de carga (%s), intento %d/%d: %s",
                       "reanudar" if start else "pausar", n, MAX_TRIES, e)
-        db.set_state(TRIES, 0 if n >= MAX_TRIES else n)
         if n < MAX_TRIES:
+            db.set_state(TRIES, n)
             return "reintentar"
+        db.set_state(TRIES, 0)
         notify(f"⚠️ {config.CAR_NAME}: no he podido {'reanudar' if start else 'pausar'} la carga "
                f"({str(e)[:150]}). Revísalo en la app del coche.", "TODAY",
                event_id=f"miev3:load-fail:{db.utcnow()}")
@@ -151,9 +157,12 @@ def _reanudar(now: str, por_seguridad: bool) -> None:
     if r == "reintentar":
         return
     dur = sessions._minutos(desde, now)
-    for k, v in ((PAUSED, ""), (LOW_SINCE, ""), (RESUMED, now),
-                 (PAUSED_MIN, float(db.get_state(PAUSED_MIN) or 0) + dur)):
+    for k, v in ((PAUSED, ""), (LOW_SINCE, ""), (PAUSED_MIN, float(db.get_state(PAUSED_MIN) or 0) + dur)):
         db.set_state(k, v)
+    # La pausa del cargador cuenta desde la reanudación: así la carga no se parte en dos y, si el
+    # coche ya no vuelve a cargar, se cierra sola pasado CHARGE_MERGE_GAP_MIN
+    if db.get_state("session_pause_ts"):
+        db.set_state("session_pause_ts", now)
     if r == "ok":
         motivo = (f"{config.LOAD_PAUSE_MAX_MIN:.0f} min de pausa como máximo" if por_seguridad
                   else "la casa ya consume poco")
@@ -161,59 +170,65 @@ def _reanudar(now: str, por_seguridad: bool) -> None:
                "TODAY" if por_seguridad else "INFO", event_id=f"miev3:load-resume:{desde}")
 
 
+def en_pausa() -> bool:
+    """Hay una pausa del control en curso (sessions no cierra la carga mientras dure)."""
+    return bool(db.get_state(PAUSED))
+
+
 def tick(now: str | None = None, refrescar=None) -> None:
     """refrescar: función que lee el coche (en caché) y guarda la lectura; el colector pasa la suya."""
     now = now or db.utcnow()
     paused = db.get_state(PAUSED) or ""
     if paused:
-        kw = potencia_casa()
-        if sessions._minutos(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
-            if kw is None or kw < config.LOAD_HIGH_KW:
-                _reanudar(now, por_seguridad=True)
-                return
-            # La casa sigue alta (horno, estufa): reanudar haría saltar el limitador. Se alarga.
-            if db.get_state(EXTENDED) != paused:
-                db.set_state(EXTENDED, paused)
-                notify(f"⚠️ {config.CAR_NAME}: la carga lleva {config.LOAD_PAUSE_MAX_MIN:.0f} min en "
-                       f"pausa y la casa sigue en {kw:.1f} kW. Alargo la pausa hasta que baje.",
-                       "TODAY", event_id=f"miev3:load-extend:{paused}")
-        if kw is None:
-            return
-        if kw >= config.LOAD_LOW_KW:
-            db.set_state(LOW_SINCE, "")
-            return
-        since = db.get_state(LOW_SINCE) or ""
-        if not since:
-            db.set_state(LOW_SINCE, now)
-        elif sessions._minutos(since, now) >= config.LOAD_LOW_MIN:
-            _reanudar(now, por_seguridad=False)
+        _tick_en_pausa(now, paused)
         return
     ciclo = db.get_state("session_start_ts") or ""
     s = _ultima_lectura()
-    if _carga_vigilable(s, ciclo):
+    if not _en_casa_bajo_limite(s) or _abandonada(ciclo):
+        return                                   # sin carga que proteger: ni HA ni coche
+    if _carga_vigilable(s):
         kw = potencia_casa()
         if kw is not None and kw >= config.LOAD_HIGH_KW:
             _pausar(now, ciclo)
         return
-    if refrescar is None or not _puede_empezar(s, ciclo, now):
-        return                                   # sin carga que proteger: ni HA ni coche
+    # La lectura dice que no carga, pero si es vieja puede haber empezado una carga después
+    if refrescar is None or sessions._minutos(s["ts"], now) <= STALE_MIN:
+        return
+    cupo = _cupo_de_lectura(now)
+    if not cupo:
+        return                                   # sin cupo, HA no cambiaría nada
     kw = potencia_casa()
     if kw is None or kw < config.LOAD_HIGH_KW:
         return
-    ultima = db.get_state(REFRESHED) or ""
-    if ultima and sessions._minutos(ultima, now) < REFRESH_EVERY_MIN:
-        return
-    dia = datetime.fromisoformat(now).astimezone(config.LOCAL_TZ).date().isoformat()
-    d, _, n = (db.get_state(REFRESH_DAY) or "").partition("#")
-    n = int(n) if d == dia else 0
-    if n >= REFRESH_MAX_DAY:
-        return
-    db.set_state(REFRESH_DAY, f"{dia}#{n + 1}")
+    db.set_state(REFRESH_DAY, cupo)
     db.set_state(REFRESHED, now)
     refrescar()
-    ciclo = db.get_state("session_start_ts") or ""
-    if _carga_vigilable(_ultima_lectura(), ciclo):
-        _pausar(now, ciclo)
+    if _carga_vigilable(_ultima_lectura()):
+        _pausar(now, db.get_state("session_start_ts") or "")
+
+
+def _tick_en_pausa(now: str, paused: str) -> None:
+    kw = potencia_casa()
+    if sessions._minutos(paused, now) >= config.LOAD_PAUSE_MAX_MIN:
+        if kw is None or kw < config.LOAD_HIGH_KW:
+            _reanudar(now, por_seguridad=True)
+            return
+        # La casa sigue alta (horno, estufa): reanudar haría saltar el limitador. Se alarga.
+        if db.get_state(EXTENDED) != paused:
+            db.set_state(EXTENDED, paused)
+            notify(f"⚠️ {config.CAR_NAME}: la carga lleva {config.LOAD_PAUSE_MAX_MIN:.0f} min en "
+                   f"pausa y la casa sigue en {kw:.1f} kW. Alargo la pausa hasta que baje.",
+                   "TODAY", event_id=f"miev3:load-extend:{paused}")
+    if kw is None:
+        return
+    since = db.get_state(LOW_SINCE) or ""
+    if kw >= config.LOAD_LOW_KW:
+        if since:
+            db.set_state(LOW_SINCE, "")
+    elif not since:
+        db.set_state(LOW_SINCE, now)
+    elif sessions._minutos(since, now) >= config.LOAD_LOW_MIN:
+        _reanudar(now, por_seguridad=False)
 
 
 def resumen_carga(ts0: str, soc_final: float) -> str:
@@ -225,7 +240,7 @@ def resumen_carga(ts0: str, soc_final: float) -> str:
         return ""
     texto = f"\n⏸️ {n} pausa{'s' if n > 1 else ''} por consumo de la casa " \
             f"({float(db.get_state(PAUSED_MIN) or 0):.0f} min)"
-    limite = _ultima_lectura().get("charge_limit_ac")
-    if limite and soc_final < float(limite) - 1:
-        texto += f" · ⚠️ se quedó en {soc_final:.0f}% de {float(limite):.0f}%"
+    limite = float(_ultima_lectura().get("charge_limit_ac") or 0)
+    if limite and soc_final < limite - 1:
+        texto += f" · ⚠️ se quedó en {soc_final:.0f}% de {limite:.0f}%"
     return texto

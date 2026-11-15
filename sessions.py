@@ -75,6 +75,13 @@ def _cerrar_sesion():
     notify(texto, "TODAY", event_id=f"miev3:carga:{ts0}")
 
 
+def _control_en_pausa() -> bool:
+    """Una pausa del control de carga no cierra la carga (al reanudar, control.py mueve
+    session_pause_ts a esa hora)."""
+    import control   # aquí: control importa sessions
+    return control.en_pausa()
+
+
 def process(snap: dict):
     prev_charging = db.get_state("charging", "0") == "1"
     # Estado de carga desconocido: se mantiene el anterior para no cerrar una sesión en falso
@@ -86,9 +93,7 @@ def process(snap: dict):
     pausa = db.get_state("session_pause_ts")
 
     if now_charging and not prev_charging:
-        # Una pausa del control de carga (control.py) tampoco parte la carga
-        if pausa and (_minutos(pausa, ts) < config.CHARGE_MERGE_GAP_MIN
-                      or (db.get_state("load_resumed_at") or "") > pausa):
+        if pausa and _minutos(pausa, ts) < config.CHARGE_MERGE_GAP_MIN:
             db.set_state("session_pause_ts", "")  # se reanuda la misma carga
         else:
             if pausa:
@@ -103,7 +108,7 @@ def process(snap: dict):
         db.set_state("session_end_soc", soc)
 
     elif not now_charging and pausa and _minutos(pausa, ts) >= config.CHARGE_MERGE_GAP_MIN \
-            and not db.get_state("load_paused_at") and (db.get_state("load_resumed_at") or "") <= pausa:
+            and not _control_en_pausa():
         _cerrar_sesion()
 
     if soc <= config.LOW_SOC_ALERT and not snap["plugged"] and db.get_state("low_alert") != "1":

@@ -108,6 +108,13 @@ def kia_tick():
 def run():
     db.init()
     last_kia = 0
+
+    def refrescar():
+        """Lectura extra que pide el control de carga: también cuenta como lectura programada."""
+        nonlocal last_kia
+        last_kia = time.time()
+        kia_tick()
+
     while True:
         try:
             settings.load()  # ajustes cambiados en el panel, sin reiniciar
@@ -123,7 +130,7 @@ def run():
 
         if control.activo():
             try:
-                control.tick(refrescar=kia_tick)
+                control.tick(refrescar=refrescar)
             except Exception:
                 logging.exception("Error en el control de carga")
 
