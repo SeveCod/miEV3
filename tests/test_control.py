@@ -100,15 +100,21 @@ def test_cargando_desconocido_usa_la_potencia(env):
     assert ordenes == ["stop"]
 
 
-def test_tras_reanudar_sigue_vigilando_hasta_la_lectura_siguiente(env):
-    """La lectura guardada es de cuando estaba en pausa (sin cargar); la reanudación cuenta."""
+def test_tras_reanudar_no_supone_que_carga_lo_confirma_leyendo(env):
+    """La lectura guardada es de la pausa (sin cargar). Tras reanudar no se da por hecho que carga
+    (pausar un coche que no carga es el fallo real del 14/11): con la casa alta y esa lectura
+    vieja, una lectura extra lo confirma y entonces pausa."""
     control, casa, ordenes, _ = env
     correr(control, casa, 0, 1, kw=1.7)
     lectura(ts=t(5), charging=0, charge_power_kw=0, charge_remaining_min=0)   # lectura en pausa
     correr(control, casa, 1, 12, kw=0.3)
     assert ordenes == ["stop", "start"]
-    correr(control, casa, 12, 14, kw=1.7)
-    assert ordenes == ["stop", "start", "stop"]
+    casa["kw"] = 1.7
+    refrescar, llamadas = _refresco({"ts": t(16)})               # ya carga otra vez
+    control.tick(t(14), refrescar=refrescar)                     # lectura de hace 9 min: no lee
+    assert ordenes == ["stop", "start"] and llamadas == []
+    control.tick(t(16), refrescar=refrescar)                     # 11 min: lee, carga → pausa
+    assert ordenes == ["stop", "start", "stop"] and len(llamadas) == 1
 
 
 def test_reanuda_por_seguridad_sin_ha(env):
@@ -266,3 +272,33 @@ def test_lectura_extra_como_mucho_12_al_dia(env):
     for m in range(0, 15 * 20, 15):                            # 20 ocasiones el mismo día
         control.tick(t(m), refrescar=refrescar)
     assert len(llamadas) == 12
+
+
+def test_reanudada_y_desenchufada_la_carga_se_cierra(env, monkeypatch):
+    """Si tras reanudar el coche ya no vuelve a cargar, la carga se cierra al pasar el hueco
+    (antes quedaba abierta y la siguiente carga, días después, se unía a ella)."""
+    import config, db, sessions
+    control, casa, ordenes, _ = env
+    monkeypatch.setattr(config, "CHARGE_MERGE_GAP_MIN", 60.0)
+    avisos = []
+    monkeypatch.setattr(sessions, "notify", lambda text, urgency="TODAY", event_id=None:
+                        avisos.append(text) or True)
+    db.set_state("charging", "1")
+    db.set_state("session_start_soc", 50)
+    correr(control, casa, 0, 1, kw=1.7)                  # pausa en t(0)
+    snap = {"soc": 55, "charging": 0, "plugged": 1, "range_km": 300, "lat": CASA[0], "lon": CASA[1]}
+    sessions.process({**snap, "ts": t(5)})
+    correr(control, casa, 1, 12, kw=0.3)                 # reanuda en t(11)
+    sessions.process({**snap, "ts": t(40), "plugged": 0})
+    assert avisos == []                                  # aún dentro del hueco desde t(11)
+    sessions.process({**snap, "ts": t(75), "plugged": 0})
+    assert len(avisos) == 1 and "50% → 55%" in avisos[0]
+
+
+def test_sin_sesion_abierta_el_tope_no_bloquea_el_control(env):
+    import db
+    control, casa, ordenes, _ = env
+    db.set_state("session_start_ts", "")
+    db.set_state(control.GIVEN_UP, "")
+    correr(control, casa, 0, 1, kw=1.7)
+    assert ordenes == ["stop"]
