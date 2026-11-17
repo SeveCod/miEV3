@@ -90,6 +90,9 @@ LOAD_CHARGER_MAX_KW = _f("LOAD_CHARGER_MAX_KW", "7.4")  # potencia del cargador 
 # --- Panel web ---
 DASH_USER = os.getenv("DASH_USER", "admin")
 DASH_PASS = os.getenv("DASH_PASS", "")
+# Una sola puerta (Cloudflare Access): nginx reenvía X-Portal-Token si cf-access-gate validó
+# el JWT. En lab, el valor de /etc/cf-access-gate/portal-token. Vacío = contraseña de siempre.
+PORTAL_TOKEN = os.getenv("PORTAL_TOKEN", "")
 API_PORT = _f("API_PORT", "8090", int)
 INGEST_TOKEN = os.getenv("INGEST_TOKEN", "")
 

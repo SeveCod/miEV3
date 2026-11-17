@@ -10,7 +10,7 @@ import config, db, settings, stats
 
 # Sin /docs ni /openapi.json: el panel no necesita describir su API a quien no ha entrado
 app = FastAPI(title="MiEV3", docs_url=None, redoc_url=None, openapi_url=None)
-security = HTTPBasic()
+security = HTTPBasic(auto_error=False)  # el 401 lo da auth(): antes mira el token del portal
 STATIC = Path(__file__).resolve().parent / "static"   # rutas fijas: no dependen del directorio de arranque
 VERSION = (STATIC.parent / "VERSION").read_text().strip()
 
@@ -39,8 +39,16 @@ def _same(a: str, b: str) -> bool:
     """Comparación en tiempo constante que admite caracteres no ASCII."""
     return secrets.compare_digest(a.encode(), b.encode())
 
-def auth(cred: HTTPBasicCredentials = Depends(security)):
-    ok = config.secret_ok(config.DASH_PASS, config.DASH_PASS_MIN) and \
+def portal_ok(received: str | None) -> bool:
+    """True si la petición ya la validó Cloudflare Access (X-Portal-Token que pone nginx).
+    Sin token configurado o con uno corto (< 32) no abre nada: queda la contraseña."""
+    expected = config.PORTAL_TOKEN
+    return bool(expected and len(expected) >= 32 and received and _same(received, expected))
+
+def auth(request: Request, cred: HTTPBasicCredentials | None = Depends(security)):
+    if portal_ok(request.headers.get("X-Portal-Token")):
+        return
+    ok = cred is not None and config.secret_ok(config.DASH_PASS, config.DASH_PASS_MIN) and \
          _same(cred.username, config.DASH_USER) and _same(cred.password, config.DASH_PASS)
     if not ok:
         raise HTTPException(401, headers={"WWW-Authenticate": "Basic"})
