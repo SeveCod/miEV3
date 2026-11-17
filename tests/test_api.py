@@ -154,3 +154,42 @@ def test_gasolina_cambia_equivalencia(client, monkeypatch):
     e = client.get("/api/efficiency").json()
     assert e["fuel"]["label"] == "Gasolina"
     assert e["last_day"]["l_100"] == pytest.approx(12.0 / 8.9)
+
+
+PORTAL = "p" * 40
+
+
+@pytest.fixture
+def anon(client):
+    """Mismo servidor, pero sin credenciales Basic."""
+    from fastapi.testclient import TestClient
+    import api
+    return TestClient(api.app)
+
+
+def test_token_del_portal_entra_sin_contrasena(anon, monkeypatch):
+    """nginx reenvía X-Portal-Token solo si cf-access-gate validó el JWT de Cloudflare Access."""
+    import config
+    monkeypatch.setattr(config, "PORTAL_TOKEN", PORTAL)
+    assert anon.get("/api/status", headers={"X-Portal-Token": PORTAL}).status_code == 200
+    assert anon.get("/", headers={"X-Portal-Token": PORTAL}).status_code == 200
+
+
+@pytest.mark.parametrize("configurado,recibido", [
+    (PORTAL, "x" * 40),      # token falso
+    (PORTAL, ""),            # sin cabecera
+    ("", ""),                # sin token configurado: nunca abre
+    ("corto", "corto"),      # token corto (< 32): no abre
+])
+def test_token_del_portal_invalido_pide_contrasena(anon, monkeypatch, configurado, recibido):
+    import config
+    monkeypatch.setattr(config, "PORTAL_TOKEN", configurado)
+    h = {"X-Portal-Token": recibido} if recibido else {}
+    r = anon.get("/api/status", headers=h)
+    assert r.status_code == 401 and r.headers["WWW-Authenticate"] == "Basic"
+
+
+def test_contrasena_sigue_valiendo_con_portal_configurado(client, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "PORTAL_TOKEN", PORTAL)
+    assert client.get("/api/status").status_code == 200
