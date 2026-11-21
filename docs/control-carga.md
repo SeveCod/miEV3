@@ -37,6 +37,17 @@ Sin estas tres variables, o sin las coordenadas de casa (`HOME_LAT`/`HOME_LON`),
 
 Elige `LOAD_HIGH_KW` como *potencia contratada − potencia de carga del coche*, con algo de margen.
 
+**Comprobación de la pausa.** La API puede aceptar la orden de parar y el coche seguir cargando.
+A los 5 min de pausar, MiEV3 mira la lectura del coche (o pide una en caché, con su cupo): si
+sigue cargando, reintenta una vez y avisa al momento; si tampoco obedece, avisa para pararlo a mano.
+
+**Repartir desde Home Assistant (opcional).** Con `HA_CAR_POWER_ENTITY=input_number.coche_potencia`
+(crea antes ese `input_number`, en kW, de 0 a 11), MiEV3 publica ahí la potencia de carga en casa
+(0 si no carga) cada vez que cambia. En HA, un ayudante *Mín/máx* de tipo suma con tu sensor de la
+casa da el total casa + coche, y tus automatizaciones pueden apagar cargas (termo, estufa) antes
+de llegar a la potencia contratada. Ojo: el dato viene de la lectura del coche, que puede tener
+hasta `KIA_INTERVAL_MIN` de retraso.
+
 ## Cuándo actúa (y cuándo no pregunta nada)
 
 - **Solo en el cargador de casa.** La API del coche no da un identificador del cargador, así que

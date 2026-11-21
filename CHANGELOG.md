@@ -1,5 +1,15 @@
 # Cambios
 
+## 0.4.6-beta (2026-11-21)
+
+- **Control de carga:** la pausa ahora se comprueba. La API del coche puede aceptar el «stop» y
+  el coche seguir cargando (caso real: 4,3 kW media hora después y saltó el limitador). A los 5 min
+  de pausar se mira la lectura (o una lectura extra en caché, con su cupo): si sigue cargando,
+  reintenta una vez y avisa al momento; si tampoco obedece, avisa para pararlo a mano.
+- **Home Assistant:** nuevo `HA_CAR_POWER_ENTITY` (opcional): MiEV3 publica en ese `input_number`
+  la potencia de carga del coche en casa (0 si no carga), para que HA sume casa + coche y reparta
+  (por ejemplo, pausar el termo mientras carga).
+
 ## 0.4.5-beta (2026-11-15)
 
 - **Control de carga:** pausar y reanudar por el consumo de la casa ya no manda aviso: era ruido

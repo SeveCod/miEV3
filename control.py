@@ -43,6 +43,11 @@ PAUSED, LOW_SINCE, TRIES = "load_paused_at", "load_low_since", "load_tries"
 EXTENDED = "load_extended"   # pausa (su inicio) ya alargada y avisada
 # Carga en curso (session_start_ts): pausas hechas, minutos en pausa y si ya no se insiste
 CYCLE, COUNT, PAUSED_MIN, GIVEN_UP = "load_cycle", "load_count", "load_paused_min", "load_given_up"
+# Comprobación de la pausa: la API acepta el stop aunque el coche siga cargando (caso real del
+# 21/11: 4,3 kW 30 min después del stop y saltó el limitador). VERIFIED = pausa ya comprobada (o
+# abandonada); RETRY = "<pausa>|<hora del reintento>". PUBLISHED = último kW publicado en HA.
+VERIFY_MIN = 5            # minutos tras el stop (o el reintento) antes de mirar si obedeció
+VERIFIED, RETRY, PUBLISHED = "load_verified", "load_retry", "load_published_kw"
 
 
 def activo() -> bool:
@@ -175,11 +180,75 @@ def en_pausa() -> bool:
     return bool(db.get_state(PAUSED))
 
 
+def _publicar_ha(kw: float) -> bool:
+    """Escribe kW en el input_number HA_CAR_POWER_ENTITY. True si HA lo aceptó."""
+    try:
+        r = requests.post(f"{config.HA_URL}/api/services/input_number/set_value", timeout=5,
+                          headers={"Authorization": f"Bearer {config.HA_TOKEN}"},
+                          json={"entity_id": config.HA_CAR_POWER_ENTITY, "value": kw})
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        logging.info("No he podido publicar la potencia del coche en HA: %s", type(e).__name__)
+        return False
+
+
+def _publicar_coche(s: dict) -> None:
+    """Publica en HA la potencia de carga en casa según la última lectura (0 si no carga). Solo al
+    cambiar; si HA no responde, se reintenta en la vuelta siguiente."""
+    if not config.HA_CAR_POWER_ENTITY:
+        return
+    kw = round(float(s.get("charge_power_kw") or 0), 1) if _carga_vigilable(s) else 0.0
+    if db.get_state(PUBLISHED) != str(kw) and _publicar_ha(kw):
+        db.set_state(PUBLISHED, str(kw))
+
+
+def _verificar_pausa(now: str, paused: str, refrescar) -> None:
+    """A los VERIFY_MIN de la pausa mira si el coche dejó de cargar (lectura extra con su cupo si no
+    hay una posterior). Si sigue: reintenta el stop una vez y avisa; si tampoco, avisa y lo deja."""
+    if db.get_state(VERIFIED) == paused:
+        return
+    pausa, _, reintento = (db.get_state(RETRY) or "").partition("|")
+    desde = reintento if pausa == paused and reintento else paused
+    if sessions._minutos(desde, now) < VERIFY_MIN:
+        return
+    s = _ultima_lectura()
+    if not s or sessions._minutos(desde, s["ts"]) <= 0:
+        cupo = _cupo_de_lectura(now) if refrescar is not None else ""
+        if not cupo:
+            return                               # se mira con la próxima lectura programada
+        db.set_state(REFRESH_DAY, cupo)
+        db.set_state(REFRESHED, now)
+        refrescar()
+        s = _ultima_lectura()
+        if sessions._minutos(desde, s["ts"]) <= 0:
+            return
+    if not _carga_vigilable(s):
+        db.set_state(VERIFIED, paused)
+        return
+    kw = s.get("charge_power_kw") or 0
+    if desde == paused:
+        _orden(start=False)
+        db.set_state(RETRY, f"{paused}|{now}")
+        logging.warning("La pausa no se cumplió (%.1f kW): reintento", kw)
+        notify(f"⚠️ {config.CAR_NAME}: pausé la carga por el consumo de la casa, pero sigue cargando "
+               f"a {kw:.1f} kW. Lo reintento; si no para, puede saltar el limitador.", "CRITICAL",
+               event_id=f"miev3:load-retry:{paused}")
+        return
+    db.set_state(VERIFIED, paused)
+    logging.warning("La pausa tampoco se cumplió tras el reintento (%.1f kW)", kw)
+    notify(f"⚠️ {config.CAR_NAME}: el coche no obedece la pausa y sigue cargando a {kw:.1f} kW. "
+           "Páralo desde la app o el cargador: puede saltar el limitador.", "CRITICAL",
+           event_id=f"miev3:load-disobey:{paused}")
+
+
 def tick(now: str | None = None, refrescar=None) -> None:
     """refrescar: función que lee el coche (en caché) y guarda la lectura; el colector pasa la suya."""
     now = now or db.utcnow()
+    _publicar_coche(_ultima_lectura())
     paused = db.get_state(PAUSED) or ""
     if paused:
+        _verificar_pausa(now, paused, refrescar)
         _tick_en_pausa(now, paused)
         return
     ciclo = db.get_state("session_start_ts") or ""
