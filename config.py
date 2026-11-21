@@ -80,6 +80,9 @@ NOTIFY_DRY_RUN = os.getenv("NOTIFY_DRY_RUN", "") == "1"
 HA_URL = os.getenv("HA_URL", "").strip().rstrip("/")
 HA_TOKEN = os.getenv("HA_TOKEN", "")
 HA_POWER_ENTITY = os.getenv("HA_POWER_ENTITY", "").strip()
+# Opcional: input_number de HA donde publicar la potencia de carga del coche (kW; 0 = no carga),
+# para que HA sume casa + coche y reparta (p. ej. pausar el termo). Vacío = no se publica.
+HA_CAR_POWER_ENTITY = os.getenv("HA_CAR_POWER_ENTITY", "").strip()
 LOAD_HIGH_KW = _f("LOAD_HIGH_KW", "1.0")          # casa ≥ esto → pausa la carga
 LOAD_LOW_KW = _f("LOAD_LOW_KW", "0.6")            # casa < esto durante LOAD_LOW_MIN → reanuda
 LOAD_LOW_MIN = _f("LOAD_LOW_MIN", "10")

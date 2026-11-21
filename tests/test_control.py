@@ -302,3 +302,61 @@ def test_sin_sesion_abierta_el_tope_no_bloquea_el_control(env):
     db.set_state(control.GIVEN_UP, "")
     correr(control, casa, 0, 1, kw=1.7)
     assert ordenes == ["stop"]
+
+
+# --- La pausa se comprueba (caso real del 21/11: la API aceptó el stop, el coche siguió a 4,3 kW
+# y el limitador saltó 30 min después) ---
+
+def test_pausa_no_obedecida_reintenta_y_avisa(env):
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 1, kw=1.7)                          # pausa en t(0)
+    refrescar, llamadas = _refresco({"ts": t(9)})                # el coche sigue cargando
+    for m in range(1, 10):
+        control.tick(t(m), refrescar=refrescar)
+    assert llamadas == [1]                                       # una lectura extra a los 5 min
+    assert ordenes == ["stop", "stop"]
+    assert len(avisos) == 1 and "sigue cargando" in avisos[0][0]
+
+
+def test_pausa_obedecida_no_insiste(env):
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 1, kw=1.7)
+    refrescar, llamadas = _refresco({"ts": t(5), **PARADO, "plugged": 1})
+    for m in range(1, 30):
+        control.tick(t(m), refrescar=refrescar)
+    assert llamadas == [1] and ordenes == ["stop"] and avisos == []
+
+
+def test_pausa_no_obedecida_tras_reintento_deja_de_insistir(env):
+    control, casa, ordenes, avisos = env
+    correr(control, casa, 0, 1, kw=1.7)
+    refrescar, llamadas = _refresco({"ts": t(30)})               # sigue cargando siempre
+    for m in range(1, 60):
+        control.tick(t(m), refrescar=refrescar)
+    assert ordenes == ["stop", "stop"]                           # un reintento, no un bucle
+    assert len(avisos) == 2 and "no obedece" in avisos[1][0]
+
+
+# --- Potencia del coche publicada en Home Assistant (opcional) ---
+
+def test_publica_potencia_del_coche_solo_al_cambiar(env, monkeypatch):
+    import config
+    control, casa, ordenes, _ = env
+    monkeypatch.setattr(config, "HA_CAR_POWER_ENTITY", "input_number.coche")
+    enviados = []
+    monkeypatch.setattr(control, "_publicar_ha", lambda kw: enviados.append(kw) or True)
+    casa["kw"] = 0.2
+    for m in range(0, 3):
+        control.tick(t(m))
+    assert enviados == [5.7]
+    lectura(ts=t(5), **PARADO)
+    control.tick(t(5))
+    assert enviados == [5.7, 0.0]
+
+
+def test_sin_entidad_del_coche_no_publica(env, monkeypatch):
+    import config
+    control, casa, _, _ = env
+    monkeypatch.setattr(config, "HA_CAR_POWER_ENTITY", "")
+    monkeypatch.setattr(control, "_publicar_ha", lambda kw: pytest.fail("no debe publicar"))
+    control.tick(t(0))

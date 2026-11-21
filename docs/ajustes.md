@@ -64,6 +64,7 @@ Notas:
 | `API_PORT` | Puerto local del panel (8090) |
 | `INGEST_TOKEN` | Token que debe enviar el agente del V2C Trydan (16 caracteres o más; vacío = ingesta desactivada) |
 | `HA_URL`, `HA_TOKEN`, `HA_POWER_ENTITY` | Home Assistant para el control de carga (opcional; vacío = apagado) |
+| `HA_CAR_POWER_ENTITY` | Opcional: `input_number` (kW) donde MiEV3 publica la potencia de carga del coche en casa, para que HA sume casa + coche y reparta |
 | `DB_PATH` | Ruta de la base de datos (`miev3.db`) |
 | `TZ` | Tu zona horaria: horarios (viajes 23:45, resumen domingo 20:00) y días locales |
 
