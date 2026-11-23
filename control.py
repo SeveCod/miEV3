@@ -24,7 +24,7 @@ Reglas:
 - Una orden que falla se reintenta en los minutos siguientes; a los MAX_TRIES fallos avisa y
   no insiste en esa carga.
 - Pausar y reanudar por la casa no avisa (es ruido): lo cuenta «Carga terminada», con cuántas
-  pausas hubo y si se quedó por debajo del límite. Solo avisa la reanudación por tiempo máximo.
+  pausas hubo (y el motivo de fin, si se quedó por debajo del límite). Solo avisa la reanudación por tiempo máximo.
 Parar y reanudar: probado en un Kia EV3 (UE), el coche obedece (2026-11-15). Otros modelos: TODO verificar.
 """
 import logging
@@ -307,9 +307,6 @@ def resumen_carga(ts0: str, soc_final: float) -> str:
     n = int(db.get_state(COUNT) or 0)
     if not n:
         return ""
-    texto = f"\n⏸️ {n} pausa{'s' if n > 1 else ''} por consumo de la casa " \
-            f"({float(db.get_state(PAUSED_MIN) or 0):.0f} min)"
-    limite = float(_ultima_lectura().get("charge_limit_ac") or 0)
-    if limite and soc_final < limite - 1:
-        texto += f" · ⚠️ se quedó en {soc_final:.0f}% de {limite:.0f}%"
-    return texto
+    # Si se quedó por debajo del límite lo dice la línea del motivo (sessions)
+    return f"\n⏸️ {n} pausa{'s' if n > 1 else ''} por consumo de la casa " \
+           f"({float(db.get_state(PAUSED_MIN) or 0):.0f} min)"

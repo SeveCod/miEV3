@@ -20,9 +20,9 @@ def env(tmp_path, monkeypatch):
     return sessions, db, avisos
 
 
-def snap(ts, soc, charging, plugged=True, lat=40.0001, lon=-3.7002):
+def snap(ts, soc, charging, plugged=True, lat=40.0001, lon=-3.7002, **extra):
     return {"ts": ts, "soc": soc, "charging": charging, "plugged": plugged,
-            "range_km": 200, "lat": lat, "lon": lon}
+            "range_km": 200, "lat": lat, "lon": lon, **extra}
 
 
 def _secuencia(sessions, tramos):
@@ -94,3 +94,88 @@ def test_bateria_baja_today_una_vez(env):
         ("2026-10-20T08:30:00+00:00", 17, False, False),
     ])
     assert len(avisos) == 1 and avisos[0][1] == "TODAY" and "🪫" in avisos[0][0]
+
+
+# --- Motivo de fin de carga -------------------------------------------------------------------
+
+def _carga(sessions, fin_soc, fin_plugged, kw=4.4, faltan=400, limite_ac=80, limite_dc=90,
+           cierre_cargando=False):
+    """Carga 35 % → fin_soc y cierre 91 min después (o con otra carga que empieza)."""
+    lim = {"charge_limit_ac": limite_ac, "charge_limit_dc": limite_dc}
+    sessions.process(snap("2026-11-21T18:16:51+00:00", 35, True, charge_power_kw=kw,
+                          charge_remaining_min=faltan, **lim))
+    sessions.process(snap("2026-11-21T19:04:01+00:00", fin_soc, False, plugged=fin_plugged,
+                          charge_power_kw=0.0, charge_remaining_min=0.0, **lim))
+    sessions.process(snap("2026-11-21T20:35:00+00:00", fin_soc, cierre_cargando,
+                          charge_power_kw=4.4 if cierre_cargando else 0.0, **lim))
+
+
+def _motivo(db):
+    with db.conn() as c:
+        return c.execute("SELECT end_reason FROM charge_sessions").fetchone()[0]
+
+
+def test_real_21_11_parada_enchufado_por_debajo_del_limite(env):
+    """Real (sesión 27): 35 → 37,5 % con el coche enchufado, límite 80 %, faltaban 400 min
+    (saltó el limitador). Debe decir que se paró enchufado, sin culpar a nadie."""
+    sessions, db, avisos = env
+    _carga(sessions, 37.5, True)
+    assert _motivo(db) == "stopped"
+    texto = avisos[0][0]
+    assert "⚠️ Se paró enchufado en 38% de 80%, faltaban ~400 min" in texto
+    assert "¿corte de luz, el cargador o el horario de carga?" in texto
+
+
+def test_real_22_11_llega_al_limite(env):
+    """Real (sesión 28): acaba en 80 % con límite 80 %."""
+    sessions, db, avisos = env
+    _carga(sessions, 80, True, faltan=6)
+    assert _motivo(db) == "limit"
+    assert "🎯 Llegó al límite del coche (80%)" in avisos[0][0]
+    assert "Se paró" not in avisos[0][0]
+
+
+def test_desenchufado_antes_del_limite(env):
+    sessions, db, avisos = env
+    _carga(sessions, 60, False)
+    assert _motivo(db) == "unplugged"
+    assert "🔌 Desenchufado en 60% de 80%" in avisos[0][0]
+
+
+def test_al_limite_y_desenchufado_cuenta_como_limite(env):
+    sessions, db, _ = env
+    _carga(sessions, 79.5, False)
+    assert _motivo(db) == "limit"
+
+
+def test_carga_rapida_usa_el_limite_de_dc(env):
+    sessions, db, _ = env
+    _carga(sessions, 90, True, kw=95.0)   # 90 % < 80-1 no; con DC (90 %) sí es el límite
+    assert _motivo(db) == "limit"
+
+
+def test_cierre_porque_empieza_otra_carga_usa_datos_de_la_pausa(env):
+    """Si la sesión se cierra cuando ya empieza otra (enchufado y cargando), el motivo sale de
+    la lectura en la que paró, no de la actual."""
+    sessions, db, avisos = env
+    _carga(sessions, 60, False, cierre_cargando=True)
+    assert _motivo(db) == "unplugged"
+    assert len(avisos) == 1
+
+
+def test_sin_datos_motivo_desconocido(env):
+    sessions, db, avisos = env
+    _carga(sessions, 50, None, limite_ac=None, limite_dc=None)
+    assert _motivo(db) is None
+    for frase in ("🎯", "🔌", "Se paró"):
+        assert frase not in avisos[0][0]
+
+
+def test_motivo_fin_tabla():
+    import sessions
+    assert sessions.motivo_fin(80, 1, 80) == "limit"
+    assert sessions.motivo_fin(50, "1", "80") == "stopped"
+    assert sessions.motivo_fin(50, "0", "80") == "unplugged"
+    assert sessions.motivo_fin(50, "", "80") is None
+    assert sessions.motivo_fin(50, "1", "") is None
+    assert sessions.motivo_fin(50, "0", "") == "unplugged"

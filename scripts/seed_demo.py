@@ -55,4 +55,8 @@ with db.conn() as c:
     c.executemany(f"INSERT INTO daily_stats ({','.join(db.DAILY_COLUMNS)}) VALUES (?,?,?,?,?,?,?,?)", daily)
     c.executemany("INSERT INTO charge_sessions (start_ts,end_ts,soc_start,soc_end,kwh_est,cost_eur,source) "
                   "VALUES (?,?,?,?,?,?,'demo')", charges)
+    # Motivo de fin: todas al límite salvo una que se paró enchufada (p. ej. un corte de luz)
+    c.execute("UPDATE charge_sessions SET end_reason='limit'")
+    c.execute("UPDATE charge_sessions SET end_reason='stopped', soc_end=soc_start+6 WHERE id="
+              "(SELECT id FROM charge_sessions ORDER BY end_ts DESC LIMIT 1 OFFSET 1)")
 print(f"{config.DB_PATH}: {len(snaps)} lecturas, {len(trips)} viajes, {len(charges)} cargas")

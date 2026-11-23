@@ -96,7 +96,13 @@ def _m1_base(c):
 
 # Migraciones numeradas: la N lleva la base de la versión N-1 a la N (PRAGMA user_version).
 # Un cambio de esquema = una función nueva AL FINAL; las existentes no se tocan nunca.
-MIGRATIONS = (_m1_base,)
+def _m2_end_reason(c):
+    """0.4.7: motivo de fin de cada carga ('limit', 'unplugged', 'stopped'; NULL = desconocido o
+    carga anterior a esta versión)."""
+    if "end_reason" not in {r["name"] for r in c.execute("PRAGMA table_info(charge_sessions)")}:
+        c.execute("ALTER TABLE charge_sessions ADD COLUMN end_reason TEXT")
+
+MIGRATIONS = (_m1_base, _m2_end_reason)
 SCHEMA_VERSION = len(MIGRATIONS)
 
 def init():
