@@ -117,7 +117,7 @@ la proyección de km al año.
 
 | Aviso | Cuándo |
 |---|---|
-| ✅ Carga terminada | Al cerrar cada carga: % inicial y final, kWh, €, lugar y horas |
+| ✅ Carga terminada | Al cerrar cada carga: % inicial y final, kWh, €, lugar, horas y cómo terminó (ver abajo) |
 | 🪫 Batería baja | Batería ≤ umbral y sin enchufar. Avisa **una vez**, y no vuelve a avisar hasta que la batería supera el umbral + 5 |
 | ⚠️ Sin datos del coche | Si no se puede leer en *Aviso de coche sin datos* (2 h); se repite cada 12 h mientras siga así, y avisa cuando vuelve |
 | 📊 Resumen semanal | Domingos a las 20:00: km, cargas, kWh y € de la semana |
@@ -132,3 +132,21 @@ la proyección de km al año.
 - **Agente del V2C Trydan:** el endpoint y los campos dependen del firmware.
 - **Cargas que cruzan la medianoche:** en el recorrido diario se reparten entre los dos días; en el
   histórico cuentan en el día en que terminan.
+
+## Cómo terminó cada carga
+
+Al dejar de cargar, MiEV3 mira la lectura del coche (en caché) y guarda el motivo en
+`charge_sessions.end_reason`. El aviso y el panel lo muestran:
+
+| Motivo | Cuándo | Aviso | Panel |
+|---|---|---|---|
+| `limit` | Batería a 1 punto o menos del límite del coche (AC; DC si cargaba a más de 11,5 kW) | 🎯 Llegó al límite | sin marca |
+| `unplugged` | Desenchufado por debajo del límite | 🔌 Desenchufado en X % | 🔌 |
+| `stopped` | Sigue enchufado y por debajo del límite | ⚠️ Se paró enchufado en X % de Y %, faltaban ~N min | ⚠️ |
+| vacío | Faltan datos, o carga anterior a la 0.4.7 | nada | nada |
+
+La nube del coche no dice **quién** paró la carga: `stopped` puede ser un corte de luz, el
+cargador (horario, fallo, limitador), el horario de carga del coche o una orden desde la app.
+Con lecturas cada 30 min, la hora de fin tiene esa precisión. Cuando haya datos del cargador
+(`/ingest/v2c`) se podrá distinguir «paró el cargador» de «paró el coche».
+

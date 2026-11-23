@@ -1,5 +1,13 @@
 # Cambios
 
+## 0.4.7-beta (2026-11-23)
+
+- **Cómo terminó cada carga** (idea de un usuario de la beta): el aviso de «Carga terminada» y
+  el panel dicen si llegó al límite del coche, si se desenchufó antes o si **se paró con el coche
+  enchufado por debajo del límite** (corte de luz, cargador, horario…), con lo que faltaba.
+  Se guarda en `charge_sessions.end_reason` (migración 2; las cargas anteriores quedan sin
+  motivo). La nube del coche no dice quién la paró: ver `docs/como-funciona.md`.
+
 ## 0.4.6-beta (2026-11-21)
 
 - **Control de carga:** la pausa ahora se comprueba. La API del coche puede aceptar el «stop» y

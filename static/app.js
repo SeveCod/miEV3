@@ -83,6 +83,16 @@ function speedColor(v){
   return "rgb(192,86,59)";
 }
 
+// Motivo de fin de una carga (sessions.motivo_fin). Solo se marca lo anómalo: llegar al límite
+// ('limit') es lo normal y no lleva icono. Textos fijos
+const END_REASONS = {
+  unplugged: ["🔌", "Desenchufado antes del límite"],
+  stopped: ["⚠️", "Se paró enchufado antes del límite: ¿corte de luz, el cargador o el horario de carga?"],
+};
+const endReason = s => {
+  const r = END_REASONS[s.end_reason];
+  return r ? ` <span class="why" title="${r[1]}" aria-label="${r[1]}">${r[0]}</span>` : "";
+};
 function renderDays(trips, sessions, live, dayCost){
   const ymd = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
   const mins = d => d.getHours()*60 + d.getMinutes();
@@ -113,7 +123,7 @@ function renderDays(trips, sessions, live, dayCost){
         `<tr><td>${hhmm(tripMin(t))}</td><td class="n">${fmt(t.distance_km,1)}</td><td class="n">${fmt(t.drive_min)}</td><td class="n">${fmt(t.idle_min)}</td><td class="n">${fmt(t.avg_speed)}</td><td class="n">${fmt(t.max_speed)}</td></tr>`,
         bar: `<span style="left:${tripMin(t)/14.4}%;width:${Math.max((t.drive_min||1)/14.4,.4)}%;background:${speedColor(t.avg_speed||0)}" title="${hhmm(tripMin(t))} · ${fmt(t.distance_km,1)} km · ${fmt(t.avg_speed)} km/h"></span>`})),
       ...cs.map(c => ({at: c.from, html:
-        `<tr class="chgrow"><td>${hhmm(c.from)}</td><td colspan="5">⚡ ${c.live ? "Cargando" : "Carga"}${c.first ? "" : " (desde el día anterior)"} · ${fmt(c.soc_start)} → ${fmt(c.soc_end)} %${c.live ? " ahora" : ` · hasta las ${hhmm(c.to)}`}${c.kwh_est != null && !c.live ? ` · ${fmt(c.kwh_meter ?? c.kwh_est,1)} kWh · ${fmt(c.cost_eur,2)} €` : ""}</td></tr>`,
+        `<tr class="chgrow"><td>${hhmm(c.from)}</td><td colspan="5">⚡ ${c.live ? "Cargando" : "Carga"}${c.first ? "" : " (desde el día anterior)"} · ${fmt(c.soc_start)} → ${fmt(c.soc_end)} %${c.live ? " ahora" : ` · hasta las ${hhmm(c.to)}${c.to < 1440 ? endReason(c) : ""}`}${c.kwh_est != null && !c.live ? ` · ${fmt(c.kwh_meter ?? c.kwh_est,1)} kWh · ${fmt(c.cost_eur,2)} €` : ""}</td></tr>`,
         bar: `<span class="chg" style="left:${c.from/14.4}%;width:${Math.max((c.to-c.from)/14.4,.4)}%" title="Carga ${hhmm(c.from)}–${hhmm(c.to)}"></span>`})),
     ].sort((a,b) => a.at - b.at);
     const chips = [ts.length ? `<span><b>${ts.length}</b> viajes</span><span><b>${Math.floor(min/60)} h ${min%60} min</b> al volante</span><span>máx <b>${fmt(vmax)}</b> km/h</span>` : "",
@@ -392,7 +402,7 @@ async function load(){
   });
   part(ses)(() => {
     $("sessions").innerHTML = ses.length ? ses.slice(0,15).map(s =>
-      `<tr><td>${dt(s.end_ts)}</td><td>${fmt(s.soc_start)} → ${fmt(s.soc_end)}%</td><td class="n">${fmt(s.kwh_meter ?? s.kwh_est,1)}</td><td class="n">${fmt(s.cost_eur,2)}</td></tr>`).join("")
+      `<tr><td>${dt(s.end_ts)}</td><td>${fmt(s.soc_start)} → ${fmt(s.soc_end)}%${endReason(s)}</td><td class="n">${fmt(s.kwh_meter ?? s.kwh_est,1)}</td><td class="n">${fmt(s.cost_eur,2)}</td></tr>`).join("")
       : `<tr><td colspan="4" class="empty">Las cargas aparecerán aquí al terminar la primera.</td></tr>`;
   });
   part(trips, ses, st, days)(() => {
